@@ -24,10 +24,10 @@ class L1LossMasked(nn.Module):
             x: A Variable containing a FloatTensor of size
                 (batch, max_len, dim) which contains the
                 unnormalized probability for each class.
-            target: A Variable containing a LongTensor of size
+            target: A Variable containing a IntTensor of size
                 (batch, max_len, dim) which contains the index of the true
                 class for each corresponding step.
-            length: A Variable containing a LongTensor of size (batch,)
+            length: A Variable containing a IntTensor of size (batch,)
                 which contains the length of each data in a batch.
         Shapes:
             x: B x T X D
@@ -63,10 +63,10 @@ class MSELossMasked(nn.Module):
             x: A Variable containing a FloatTensor of size
                 (batch, max_len, dim) which contains the
                 unnormalized probability for each class.
-            target: A Variable containing a LongTensor of size
+            target: A Variable containing a IntTensor of size
                 (batch, max_len, dim) which contains the index of the true
                 class for each corresponding step.
-            length: A Variable containing a LongTensor of size (batch,)
+            length: A Variable containing a IntTensor of size (batch,)
                 which contains the length of each data in a batch.
         Shapes:
             - x: :math:`[B, T, D]`
@@ -143,10 +143,10 @@ class BCELossMasked(nn.Module):
             x: A Variable containing a FloatTensor of size
                 (batch, max_len) which contains the
                 unnormalized probability for each class.
-            target: A Variable containing a LongTensor of size
+            target: A Variable containing a IntTensor of size
                 (batch, max_len) which contains the index of the true
                 class for each corresponding step.
-            length: A Variable containing a LongTensor of size (batch,)
+            length: A Variable containing a IntTensor of size (batch,)
                 which contains the length of each data in a batch.
         Shapes:
             x: B x T
@@ -448,7 +448,7 @@ def mse_loss_custom(x, y):
 class MDNLoss(nn.Module):
     """Mixture of Density Network Loss as described in https://arxiv.org/pdf/2003.01950.pdf."""
 
-    def forward(self, logp, text_lengths, mel_lengths):  # pylint: disable=no-self-use
+    def forward(self, logp, id_lengths, mel_lengths):  # pylint: disable=no-self-use
         """
         Shapes:
             mu: [B, D, T]
@@ -464,7 +464,7 @@ class MDNLoss(nn.Module):
                 dim=-1,
             )
             log_alpha[:, :, t] = torch.logsumexp(prev_step + 1e-4, dim=-1) + logp[:, :, t]
-        alpha_last = log_alpha[torch.arange(B), text_lengths - 1, mel_lengths - 1]
+        alpha_last = log_alpha[torch.arange(B), id_lengths - 1, mel_lengths - 1]
         mdn_loss = -alpha_last.mean() / T_seq
         return mdn_loss  # , log_prob_matrix
 

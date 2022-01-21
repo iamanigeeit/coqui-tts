@@ -110,20 +110,20 @@ class Tacotron(BaseTacotron):
             )
 
     def forward(  # pylint: disable=dangerous-default-value
-        self, text, text_lengths, mel_specs=None, mel_lengths=None, aux_input={"speaker_ids": None, "d_vectors": None}
+        self, char_ids, id_lengths, mel_specs=None, mel_lengths=None, aux_input={"speaker_ids": None, "d_vectors": None}
     ):
         """
         Shapes:
             text: [B, T_in]
-            text_lengths: [B]
+            id_lengths: [B]
             mel_specs: [B, T_out, C]
             mel_lengths: [B]
             aux_input: 'speaker_ids': [B, 1] and  'd_vectors':[B, C]
         """
         aux_input = self._format_aux_input(aux_input)
         outputs = {"alignments_backward": None, "decoder_outputs_backward": None}
-        inputs = self.embedding(text)
-        input_mask, output_mask = self.compute_masks(text_lengths, mel_lengths)
+        inputs = self.embedding(char_ids)
+        input_mask, output_mask = self.compute_masks(id_lengths, mel_lengths)
         # B x T_in x encoder_in_features
         encoder_outputs = self.encoder(inputs)
         # sequence masking
@@ -178,9 +178,9 @@ class Tacotron(BaseTacotron):
         return outputs
 
     @torch.no_grad()
-    def inference(self, text_input, aux_input=None):
+    def inference(self, char_ids, aux_input=None):
         aux_input = self._format_aux_input(aux_input)
-        inputs = self.embedding(text_input)
+        inputs = self.embedding(char_ids)
         encoder_outputs = self.encoder(inputs)
         if self.gst and self.use_gst:
             # B x gst_dim
@@ -217,8 +217,8 @@ class Tacotron(BaseTacotron):
             batch ([type]): [description]
             criterion ([type]): [description]
         """
-        text_input = batch["text_input"]
-        text_lengths = batch["text_lengths"]
+        char_ids = batch["char_ids"]
+        id_lengths = batch["id_lengths"]
         mel_input = batch["mel_input"]
         mel_lengths = batch["mel_lengths"]
         linear_input = batch["linear_input"]
@@ -229,8 +229,8 @@ class Tacotron(BaseTacotron):
 
         # forward pass model
         outputs = self.forward(
-            text_input,
-            text_lengths,
+            char_ids,
+            id_lengths,
             mel_input,
             mel_lengths,
             aux_input={"speaker_ids": speaker_ids, "d_vectors": d_vectors},
@@ -245,7 +245,7 @@ class Tacotron(BaseTacotron):
             alignment_lengths = mel_lengths // self.decoder.r
 
         aux_input = {"speaker_ids": speaker_ids, "d_vectors": d_vectors}
-        outputs = self.forward(text_input, text_lengths, mel_input, mel_lengths, aux_input)
+        outputs = self.forward(char_ids, id_lengths, mel_input, mel_lengths, aux_input)
 
         # compute loss
         with autocast(enabled=False):  # use float32 for the criterion
@@ -262,7 +262,7 @@ class Tacotron(BaseTacotron):
                 outputs["alignments"].float(),
                 alignment_lengths,
                 None if outputs["alignments_backward"] is None else outputs["alignments_backward"].float(),
-                text_lengths,
+                id_lengths,
             )
 
         # compute alignment error (the lower the better )

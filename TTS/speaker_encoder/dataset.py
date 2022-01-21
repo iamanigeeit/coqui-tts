@@ -1,17 +1,17 @@
 import random
-
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 
 from TTS.speaker_encoder.utils.generic_utils import AugmentWAV, Storage
-
+from TTS.tts.datasets.dataset import get_npy_path
 
 class SpeakerEncoderDataset(Dataset):
     def __init__(
         self,
         ap,
         meta_data,
+        mel_cache_path,
         voice_len=1.6,
         num_speakers_in_batch=64,
         storage_size=1,
@@ -36,6 +36,7 @@ class SpeakerEncoderDataset(Dataset):
         self.num_utter_per_speaker = num_utter_per_speaker
         self.skip_speakers = skip_speakers
         self.ap = ap
+        self.mel_cache_path = mel_cache_path
         self.verbose = verbose
         self.__parse_items()
         storage_max_size = storage_size * num_speakers_in_batch
@@ -73,9 +74,9 @@ class SpeakerEncoderDataset(Dataset):
         return audio
 
     def load_data(self, idx):
-        text, wav_file, speaker_name = self.items[idx]
-        wav = np.asarray(self.load_wav(wav_file), dtype=np.float32)
-        mel = self.ap.melspectrogram(wav).astype("float32")
+        text, wav_path, speaker_name = self.items[idx]
+        wav = np.asarray(self.load_wav(wav_path), dtype=np.float32)
+        mel = np.load(get_npy_path(self.mel_cache_path, wav_path))
         # sample seq_len
 
         assert text.size > 0, self.items[idx][1]
@@ -83,7 +84,7 @@ class SpeakerEncoderDataset(Dataset):
 
         sample = {
             "mel": mel,
-            "item_idx": self.items[idx][1],
+            "wav_file_name": self.items[idx][1],
             "speaker_name": speaker_name,
         }
         return sample
@@ -244,7 +245,7 @@ class SpeakerEncoderDataset(Dataset):
                 mel = self.ap.melspectrogram(wav)
                 feats_.append(torch.FloatTensor(mel))
 
-            labels.append(torch.LongTensor(labels_))
+            labels.append(torch.IntTensor(labels_))
             feats.extend(feats_)
 
         feats = torch.stack(feats)

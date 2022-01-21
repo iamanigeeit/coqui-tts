@@ -4,7 +4,7 @@ from TTS.config.shared_configs import BaseAudioConfig
 from TTS.trainer import Trainer, TrainingArgs
 from TTS.tts.configs.shared_configs import BaseDatasetConfig
 from TTS.tts.configs.tacotron2_config import Tacotron2Config
-from TTS.tts.datasets import load_tts_samples
+from TTS.tts.datasets import load_train_eval_items
 from TTS.tts.models.tacotron2 import Tacotron2
 from TTS.utils.audio import AudioProcessor
 
@@ -58,7 +58,7 @@ config = Tacotron2Config(  # This is the config that is saved for the future use
 ap = AudioProcessor(**config.audio.to_dict())
 
 # load training samples
-train_samples, eval_samples = load_tts_samples(dataset_config, eval_split=True)
+train_samples, eval_samples = load_train_eval_items(dataset_config, eval_split=True)
 
 # init model
 model = Tacotron2(config)

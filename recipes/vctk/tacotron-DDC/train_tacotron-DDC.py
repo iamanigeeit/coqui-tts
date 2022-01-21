@@ -4,7 +4,7 @@ from TTS.config.shared_configs import BaseAudioConfig
 from TTS.trainer import Trainer, TrainingArgs
 from TTS.tts.configs.shared_configs import BaseDatasetConfig
 from TTS.tts.configs.tacotron_config import TacotronConfig
-from TTS.tts.datasets import load_tts_samples
+from TTS.tts.datasets import load_train_eval_items
 from TTS.tts.models.tacotron import Tacotron
 from TTS.tts.utils.speakers import SpeakerManager
 from TTS.utils.audio import AudioProcessor
@@ -57,7 +57,7 @@ config = TacotronConfig(  # This is the config that is saved for the future use
 ap = AudioProcessor(**config.audio.to_dict())
 
 # load training samples
-train_samples, eval_samples = load_tts_samples(dataset_config, eval_split=True)
+train_samples, eval_samples = load_train_eval_items(dataset_config, eval_split=True)
 
 # init speaker manager for multi-speaker training
 # it mainly handles speaker-id to speaker-name for the model and the data-loader

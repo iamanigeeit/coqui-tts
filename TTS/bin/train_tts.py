@@ -2,7 +2,7 @@ import os
 
 from TTS.config import load_config, register_config
 from TTS.trainer import Trainer, TrainingArgs
-from TTS.tts.datasets import load_tts_samples
+from TTS.tts.datasets import load_train_eval_items
 from TTS.tts.models import setup_model
 from TTS.tts.utils.speakers import SpeakerManager
 from TTS.utils.audio import AudioProcessor
@@ -39,7 +39,7 @@ def main():
             config = register_config(config_base.model)()
 
     # load training samples
-    train_samples, eval_samples = load_tts_samples(config.datasets, eval_split=True)
+    train_samples, eval_samples = load_train_eval_items(config.datasets, eval_split=True)
 
     # setup audio processor
     ap = AudioProcessor(**config.audio)

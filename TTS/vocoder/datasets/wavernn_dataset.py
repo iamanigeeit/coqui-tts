@@ -110,7 +110,7 @@ class WaveRNNDataset(Dataset):
             x_input = coarse[:, : self.seq_len]
         elif isinstance(self.mode, int):
             coarse = np.stack(coarse).astype(np.int64)
-            coarse = torch.LongTensor(coarse)
+            coarse = torch.IntTensor(coarse)
             x_input = 2 * coarse[:, : self.seq_len].float() / (2 ** self.mode - 1.0) - 1.0
         y_coarse = coarse[:, 1:]
         mels = torch.FloatTensor(mels)

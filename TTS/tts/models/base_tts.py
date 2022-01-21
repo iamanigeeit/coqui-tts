@@ -43,7 +43,7 @@ class BaseTTS(BaseModel):
         """
         # don't use isintance not to import recursively
         if "Config" in config.__class__.__name__:
-            if "characters" in config:
+            if "character_config" in config:
                 _, self.config, num_chars = self.get_characters(config)
                 self.config.num_chars = num_chars
                 if hasattr(self.config, "model_args"):
@@ -58,18 +58,19 @@ class BaseTTS(BaseModel):
             raise ValueError("config must be either a *Config or *Args")
 
     @staticmethod
-    def get_characters(config: Coqpit) -> str:
+    def get_characters(config: Coqpit):
         # TODO: implement CharacterProcessor
-        if config.characters is not None:
-            symbols, phonemes = make_symbols(**config.characters)
+        if config.character_config:
+            symbols, phonemes = make_symbols(**config.character_config)
         else:
             from TTS.tts.utils.text.symbols import parse_symbols, phonemes, symbols
 
-            config.characters = CharactersConfig(**parse_symbols())
+            config.character_config = CharactersConfig(**parse_symbols())
         model_characters = phonemes if config.use_phonemes else symbols
         num_chars = len(model_characters) + getattr(config, "add_blank", False)
         return model_characters, config, num_chars
 
+    # put in __init__ ?
     def get_speaker_manager(config: Coqpit, restore_path: str, data: List, out_path: str = None) -> SpeakerManager:
         return get_speaker_manager(config, restore_path, data, out_path)
 
@@ -109,21 +110,22 @@ class BaseTTS(BaseModel):
             Dict: [description]
         """
         # setup input batch
-        text_input = batch["text"]
-        text_lengths = batch["text_lengths"]
+        char_ids = batch["char_ids"]
+        id_lengths = batch["id_lengths"]
         speaker_names = batch["speaker_names"]
         linear_input = batch["linear"]
         mel_input = batch["mel"]
         mel_lengths = batch["mel_lengths"]
         stop_targets = batch["stop_targets"]
-        item_idx = batch["item_idxs"]
+        wav_path = batch["wav_path"]
         d_vectors = batch["d_vectors"]
         speaker_ids = batch["speaker_ids"]
         attn_mask = batch["attns"]
         waveform = batch["waveform"]
         pitch = batch["pitch"]
-        max_text_length = torch.max(text_lengths.float())
-        max_spec_length = torch.max(mel_lengths.float())
+
+        max_id_length = torch.max(id_lengths)
+        max_mel_length = torch.max(mel_lengths)
 
         # compute durations from attention masks
         durations = None
@@ -131,10 +133,10 @@ class BaseTTS(BaseModel):
             durations = torch.zeros(attn_mask.shape[0], attn_mask.shape[2])
             for idx, am in enumerate(attn_mask):
                 # compute raw durations
-                c_idxs = am[:, : text_lengths[idx], : mel_lengths[idx]].max(1)[1]
+                c_idxs = am[:, : id_lengths[idx], : mel_lengths[idx]].max(1)[1]
                 # c_idxs, counts = torch.unique_consecutive(c_idxs, return_counts=True)
                 c_idxs, counts = torch.unique(c_idxs, return_counts=True)
-                dur = torch.ones([text_lengths[idx]]).to(counts.dtype)
+                dur = torch.ones([id_lengths[idx]]).to(counts.dtype)
                 dur[c_idxs] = counts
                 # smooth the durations and set any 0 duration to 1
                 # by cutting off from the largest duration indeces.
@@ -144,16 +146,16 @@ class BaseTTS(BaseModel):
                 assert (
                     dur.sum() == mel_lengths[idx]
                 ), f" [!] total duration {dur.sum()} vs spectrogram length {mel_lengths[idx]}"
-                durations[idx, : text_lengths[idx]] = dur
+                durations[idx, : id_lengths[idx]] = dur
 
         # set stop targets wrt reduction factor
-        stop_targets = stop_targets.view(text_input.shape[0], stop_targets.size(1) // self.config.r, -1)
+        stop_targets = stop_targets.view(char_ids.shape[0], stop_targets.size(1) // self.config.r, -1)
         stop_targets = (stop_targets.sum(2) > 0.0).unsqueeze(2).float().squeeze(2)
         stop_target_lengths = torch.divide(mel_lengths, self.config.r).ceil_()
 
         return {
-            "text_input": text_input,
-            "text_lengths": text_lengths,
+            "char_ids": char_ids,
+            "id_lengths": id_lengths,
             "speaker_names": speaker_names,
             "mel_input": mel_input,
             "mel_lengths": mel_lengths,
@@ -164,9 +166,9 @@ class BaseTTS(BaseModel):
             "durations": durations,
             "speaker_ids": speaker_ids,
             "d_vectors": d_vectors,
-            "max_text_length": float(max_text_length),
-            "max_spec_length": float(max_spec_length),
-            "item_idx": item_idx,
+            "max_id_length": int(max_id_length),
+            "max_spec_length": int(max_mel_length),
+            "wav_path": wav_path,
             "waveform": waveform,
             "pitch": pitch,
         }
@@ -194,76 +196,35 @@ class BaseTTS(BaseModel):
                 speaker_id_mapping = None
                 d_vector_mapping = None
 
-            # setup custom symbols if needed
-            custom_symbols = None
-            if hasattr(self, "make_symbols"):
-                custom_symbols = self.make_symbols(self.config)
-
             # init dataset
-            dataset = TTSDataset(
-                outputs_per_step=config.r if "r" in config else 1,
-                text_cleaner=config.text_cleaner,
-                compute_linear_spec=config.model.lower() == "tacotron" or config.compute_linear_spec,
-                compute_f0=config.get("compute_f0", False),
-                f0_cache_path=config.get("f0_cache_path", None),
-                meta_data=data_items,
-                ap=ap,
-                characters=config.characters,
-                custom_symbols=custom_symbols,
-                add_blank=config["add_blank"],
-                return_wav=config.return_wav if "return_wav" in config else False,
-                batch_group_size=0 if is_eval else config.batch_group_size * config.batch_size,
-                min_seq_len=config.min_seq_len,
-                max_seq_len=config.max_seq_len,
-                phoneme_cache_path=config.phoneme_cache_path,
-                use_phonemes=config.use_phonemes,
-                phoneme_language=config.phoneme_language,
-                enable_eos_bos=config.enable_eos_bos_chars,
-                use_noise_augment=not is_eval,
-                verbose=verbose,
-                speaker_id_mapping=speaker_id_mapping,
-                d_vector_mapping=d_vector_mapping if config.use_d_vector_file else None,
-            )
+            if hasattr(self, "dataset"):
+                dataset = self.dataset
+            else:
+                dataset = TTSDataset(
+                    dataset_config=config.dataset_configs[0],  # TODO: figure out how to combine datasets later
+                    ap=ap,
+                    items=data_items,
+                    outputs_per_step=config.r if "r" in config else 1,
+                    use_symbols=config.use_symbols,
+                    use_phonemes=config.use_phonemes,
+                    use_mel=config.use_mel,
+                    use_linear=config.use_linear,
+                    use_wav=config.use_wav,
+                    use_f0=config.use_f0,
+                    batch_group_size=0 if is_eval else config.batch_group_size * config.batch_size,
+                    min_seq_len=config.min_seq_len,
+                    max_seq_len=config.max_seq_len,
+                    enable_eos_bos=config.enable_eos_bos,
+                    use_noise_augment=not is_eval,
+                    speaker_id_mapping=speaker_id_mapping,
+                    d_vector_mapping=d_vector_mapping if config.use_d_vector_file else None,
+                    verbose=verbose,
+                )
+                # sort input sequences from short to long
+                dataset.sort_and_filter_items(config.get("sort_by_audio_len", default=False))
 
-            # pre-compute phonemes
-            if config.use_phonemes and config.compute_input_seq_cache and rank in [None, 0]:
-                if hasattr(self, "eval_data_items") and is_eval:
-                    dataset.items = self.eval_data_items
-                elif hasattr(self, "train_data_items") and not is_eval:
-                    dataset.items = self.train_data_items
-                else:
-                    # precompute phonemes for precise estimate of sequence lengths.
-                    # otherwise `dataset.sort_items()` uses raw text lengths
-                    dataset.compute_input_seq(config.num_loader_workers)
+                self.dataset = dataset
 
-                    # TODO: find a more efficient solution
-                    # cheap hack - store items in the model state to avoid recomputing when reinit the dataset
-                    if is_eval:
-                        self.eval_data_items = dataset.items
-                    else:
-                        self.train_data_items = dataset.items
-
-            # halt DDP processes for the main process to finish computing the phoneme cache
-            if num_gpus > 1:
-                dist.barrier()
-
-            # sort input sequences from short to long
-            dataset.sort_and_filter_items(config.get("sort_by_audio_len", default=False))
-
-            # compute pitch frames and write to files.
-            if config.compute_f0 and rank in [None, 0]:
-                if not os.path.exists(config.f0_cache_path):
-                    dataset.pitch_extractor.compute_pitch(
-                        ap, config.get("f0_cache_path", None), config.num_loader_workers
-                    )
-
-            # halt DDP processes for the main process to finish computing the F0 cache
-            if num_gpus > 1:
-                dist.barrier()
-
-            # load pitch stats computed above by all the workers
-            if config.compute_f0:
-                dataset.pitch_extractor.load_pitch_stats(config.get("f0_cache_path", None))
 
             # sampler for DDP
             sampler = DistributedSampler(dataset) if num_gpus > 1 else None

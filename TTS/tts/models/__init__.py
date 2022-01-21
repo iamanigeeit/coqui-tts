@@ -10,19 +10,19 @@ def setup_model(config, speaker_manager: "SpeakerManager" = None):
     else:
         MyModel = find_module("TTS.tts.models", config.model.lower())
     # define set of characters used by the model
-    if config.characters is not None:
+    if config.character_config is not None:
         # set characters from config
         if hasattr(MyModel, "make_symbols"):
             symbols = MyModel.make_symbols(config)
         else:
-            symbols, phonemes = make_symbols(**config.characters)
+            symbols, phonemes = make_symbols(**config.character_config)
     else:
         from TTS.tts.utils.text.symbols import phonemes, symbols  # pylint: disable=import-outside-toplevel
 
         if config.use_phonemes:
             symbols = phonemes
         # use default characters and assign them to config
-        config.characters = parse_symbols()
+        config.character_config = parse_symbols()
     # consider special `blank` character if `add_blank` is set True
     num_chars = len(symbols) + getattr(config, "add_blank", False)
     config.num_chars = num_chars

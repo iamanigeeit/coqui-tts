@@ -121,7 +121,7 @@
     Use `tts` or `tts-server` commands for testing your models.
 
     ```bash
-    $ tts --text "Text for TTS" \
+    $ tts --char_ids "Text for TTS" \
           --model_path path/to/checkpoint_x.pth.tar \
           --config_path path/to/config.json \
           --out_path folder/to/save/output.wav

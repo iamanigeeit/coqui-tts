@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from TTS.config import load_config
-from TTS.tts.datasets.TTSDataset import TTSDataset
+from TTS.tts.datasets import TTSDataset
 from TTS.tts.models import setup_model
 from TTS.tts.utils.text.symbols import make_symbols, phonemes, symbols
 from TTS.utils.audio import AudioProcessor
@@ -85,13 +85,13 @@ Example run:
     dataset = TTSDataset(
         model.decoder.r,
         C.text_cleaner,
-        compute_linear_spec=False,
+        use_linear_spec=False,
         ap=ap,
         meta_data=meta_data,
-        characters=C.characters if "characters" in C.keys() else None,
+        character_config=C.characters if "characters" in C.keys() else None,
         add_blank=C["add_blank"] if "add_blank" in C.keys() else False,
         use_phonemes=C.use_phonemes,
-        phoneme_cache_path=C.phoneme_cache_path,
+        phoneme_ids_cache_path=C.phoneme_cache_path,
         phoneme_language=C.phoneme_language,
         enable_eos_bos=C.enable_eos_bos_chars,
     )
@@ -111,26 +111,26 @@ Example run:
     with torch.no_grad():
         for data in tqdm(loader):
             # setup input data
-            text_input = data[0]
-            text_lengths = data[1]
+            char_ids = data[0]
+            id_lengths = data[1]
             linear_input = data[3]
             mel_input = data[4]
             mel_lengths = data[5]
             stop_targets = data[6]
-            item_idxs = data[7]
+            wav_path = data[7]
 
             # dispatch data to GPU
             if args.use_cuda:
-                text_input = text_input.cuda()
-                text_lengths = text_lengths.cuda()
+                char_ids = char_ids.cuda()
+                id_lengths = id_lengths.cuda()
                 mel_input = mel_input.cuda()
                 mel_lengths = mel_lengths.cuda()
 
-            model_outputs = model.forward(text_input, text_lengths, mel_input)
+            model_outputs = model.forward(char_ids, id_lengths, mel_input)
 
             alignments = model_outputs["alignments"].detach()
             for idx, alignment in enumerate(alignments):
-                item_idx = item_idxs[idx]
+                wav_file = wav_path[idx]
                 # interpolate if r > 1
                 alignment = (
                     torch.nn.functional.interpolate(
@@ -145,13 +145,13 @@ Example run:
                     .transpose(0, 1)
                 )
                 # remove paddings
-                alignment = alignment[: mel_lengths[idx], : text_lengths[idx]].cpu().numpy()
+                alignment = alignment[: mel_lengths[idx], : id_lengths[idx]].cpu().numpy()
                 # set file paths
-                wav_file_name = os.path.basename(item_idx)
+                wav_file_name = os.path.basename(wav_file)
                 align_file_name = os.path.splitext(wav_file_name)[0] + "_attn.npy"
-                file_path = item_idx.replace(wav_file_name, align_file_name)
+                file_path = wav_file.replace(wav_file_name, align_file_name)
                 # save output
-                wav_file_abs_path = os.path.abspath(item_idx)
+                wav_file_abs_path = os.path.abspath(wav_file)
                 file_abs_path = os.path.abspath(file_path)
                 file_paths.append([wav_file_abs_path, file_abs_path])
                 np.save(file_path, alignment)

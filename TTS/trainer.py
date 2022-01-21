@@ -100,8 +100,8 @@ class Trainer:
         model: nn.Module = None,
         get_model: Callable = None,
         get_data_samples: Callable = None,
-        train_samples: List = None,
-        eval_samples: List = None,
+        train_items: List = None,
+        eval_items: List = None,
         cudnn_benchmark: bool = False,
         training_assets: Dict = {},
         parse_command_line_args: bool = True,
@@ -244,13 +244,13 @@ class Trainer:
         self.use_amp_scaler = self.config.mixed_precision and self.use_cuda
 
         # load data samples
-        if train_samples is None and get_data_samples is None:
-            raise ValueError("[!] `train_samples` and `get_data_samples` cannot both be None.")
-        if train_samples is not None:
-            self.train_samples = train_samples
-            self.eval_samples = eval_samples
+        if train_items is None and get_data_samples is None:
+            raise ValueError("[!] `train_samples` and `get_data_items` cannot both be None.")
+        if train_items is not None:
+            self.train_items = train_items
+            self.eval_items = eval_items
         else:
-            self.train_samples, self.eval_samples = self.run_get_data_samples(config, get_data_samples)
+            self.train_items, self.eval_items = self.run_get_data_items(config, get_data_samples)
 
         # init TTS model
         if model is None and get_model is None:
@@ -391,13 +391,13 @@ class Trainer:
         return model
 
     @staticmethod
-    def run_get_data_samples(config: Coqpit, get_data_samples: Callable) -> nn.Module:
-        if callable(get_data_samples):
-            if len(signature(get_data_samples).sig.parameters) == 1:
-                train_samples, eval_samples = get_data_samples(config)
+    def run_get_data_items(config: Coqpit, get_data_items: Callable) -> nn.Module:
+        if callable(get_data_items):
+            if len(signature(get_data_items).sig.parameters) == 1:
+                train_items, eval_items = get_data_items(config)
             else:
-                train_samples, eval_samples = get_data_samples()
-            return train_samples, eval_samples
+                train_items, eval_items = get_data_items()
+            return train_items, eval_items
         return None, None
 
     def restore_model(
@@ -800,8 +800,8 @@ class Trainer:
         # initialize the data loader
         self.train_loader = self.get_train_dataloader(
             self.training_assets,
-            self.train_samples,
-            verbose=True,
+            data_items=self.train_items,
+            verbose=False,
         )
         # set model to training mode
         if self.num_gpus > 1:
@@ -906,7 +906,7 @@ class Trainer:
         self.eval_loader = (
             self.get_eval_dataloader(
                 self.training_assets,
-                self.eval_samples,
+                self.eval_items,
                 verbose=True,
             )
             if self.config.run_eval
@@ -941,7 +941,7 @@ class Trainer:
             if self.eval_loader is None:
                 self.eval_loader = self.get_eval_dataloader(
                     self.training_assets,
-                    self.eval_samples,
+                    self.eval_items,
                     verbose=True,
                 )
 

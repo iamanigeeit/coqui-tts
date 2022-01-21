@@ -14,7 +14,7 @@ from TTS.speaker_encoder.losses import AngleProtoLoss, GE2ELoss, SoftmaxAnglePro
 from TTS.speaker_encoder.utils.generic_utils import save_best_model, setup_model
 from TTS.speaker_encoder.utils.training import init_training
 from TTS.speaker_encoder.utils.visual import plot_embeddings
-from TTS.tts.datasets import load_tts_samples
+from TTS.tts.datasets import load_train_eval_items
 from TTS.utils.audio import AudioProcessor
 from TTS.utils.generic_utils import count_parameters, remove_experiment_folder, set_init_dict
 from TTS.utils.io import load_fsspec
@@ -156,7 +156,7 @@ def main(args):  # pylint: disable=redefined-outer-name
     optimizer = RAdam(model.parameters(), lr=c.lr)
 
     # pylint: disable=redefined-outer-name
-    meta_data_train, meta_data_eval = load_tts_samples(c.datasets, eval_split=False)
+    meta_data_train, meta_data_eval = load_train_eval_items(c.datasets, eval_split=False)
 
     data_loader, num_speakers = setup_loader(ap, is_val=False, verbose=True)
 

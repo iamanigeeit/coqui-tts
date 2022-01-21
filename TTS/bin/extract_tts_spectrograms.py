@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from TTS.config import load_config
-from TTS.tts.datasets import TTSDataset, load_tts_samples
+from TTS.tts.datasets import TTSDataset, load_train_eval_items
 from TTS.tts.models import setup_model
 from TTS.tts.utils.speakers import get_speaker_manager
 from TTS.utils.audio import AudioProcessor
@@ -23,15 +23,15 @@ def setup_loader(ap, r, verbose=False):
     dataset = TTSDataset(
         r,
         c.text_cleaner,
-        compute_linear_spec=False,
+        use_linear_spec=False,
         meta_data=meta_data,
         ap=ap,
-        characters=c.characters if "characters" in c.keys() else None,
+        character_config=c.characters if "characters" in c.keys() else None,
         add_blank=c["add_blank"] if "add_blank" in c.keys() else False,
         batch_group_size=0,
         min_seq_len=c.min_seq_len,
         max_seq_len=c.max_seq_len,
-        phoneme_cache_path=c.phoneme_cache_path,
+        phoneme_ids_cache_path=c.phoneme_cache_path,
         use_phonemes=c.use_phonemes,
         phoneme_language=c.phoneme_language,
         enable_eos_bos=c.enable_eos_bos_chars,
@@ -75,21 +75,21 @@ def set_filename(wav_path, out_path):
 
 def format_data(data):
     # setup input data
-    text_input = data["text"]
-    text_lengths = data["text_lengths"]
+    char_ids = data["char_ids"]
+    id_lengths = data["id_lengths"]
     mel_input = data["mel"]
     mel_lengths = data["mel_lengths"]
-    item_idx = data["item_idxs"]
+    wav_path = data["wav_path"]
     d_vectors = data["d_vectors"]
     speaker_ids = data["speaker_ids"]
     attn_mask = data["attns"]
-    avg_text_length = torch.mean(text_lengths.float())
+    avg_id_length = torch.mean(id_lengths.float())
     avg_spec_length = torch.mean(mel_lengths.float())
 
     # dispatch data to GPU
     if use_cuda:
-        text_input = text_input.cuda(non_blocking=True)
-        text_lengths = text_lengths.cuda(non_blocking=True)
+        char_ids = char_ids.cuda(non_blocking=True)
+        id_lengths = id_lengths.cuda(non_blocking=True)
         mel_input = mel_input.cuda(non_blocking=True)
         mel_lengths = mel_lengths.cuda(non_blocking=True)
         if speaker_ids is not None:
@@ -99,16 +99,16 @@ def format_data(data):
         if attn_mask is not None:
             attn_mask = attn_mask.cuda(non_blocking=True)
     return (
-        text_input,
-        text_lengths,
+        char_ids,
+        id_lengths,
         mel_input,
         mel_lengths,
         speaker_ids,
         d_vectors,
-        avg_text_length,
+        avg_id_length,
         avg_spec_length,
         attn_mask,
-        item_idx,
+        wav_path,
     )
 
 
@@ -117,8 +117,8 @@ def inference(
     model_name,
     model,
     ap,
-    text_input,
-    text_lengths,
+    char_ids,
+    id_lengths,
     mel_input,
     mel_lengths,
     speaker_ids=None,
@@ -131,8 +131,8 @@ def inference(
         elif d_vectors is not None:
             speaker_c = d_vectors
         outputs = model.inference_with_MAS(
-            text_input,
-            text_lengths,
+            char_ids,
+            id_lengths,
             mel_input,
             mel_lengths,
             aux_input={"d_vectors": speaker_c, "speaker_ids": speaker_ids},
@@ -142,7 +142,7 @@ def inference(
 
     elif "tacotron" in model_name:
         aux_input = {"speaker_ids": speaker_ids, "d_vectors": d_vectors}
-        outputs = model(text_input, text_lengths, mel_input, mel_lengths, aux_input)
+        outputs = model(char_ids, id_lengths, mel_input, mel_lengths, aux_input)
         postnet_outputs = outputs["model_outputs"]
         # normalize tacotron output
         if model_name == "tacotron":
@@ -167,8 +167,8 @@ def extract_spectrograms(
 
         # format data
         (
-            text_input,
-            text_lengths,
+            char_ids,
+            id_lengths,
             mel_input,
             mel_lengths,
             speaker_ids,
@@ -183,15 +183,15 @@ def extract_spectrograms(
             c.model.lower(),
             model,
             ap,
-            text_input,
-            text_lengths,
+            char_ids,
+            id_lengths,
             mel_input,
             mel_lengths,
             speaker_ids,
             d_vectors,
         )
 
-        for idx in range(text_input.shape[0]):
+        for idx in range(char_ids.shape[0]):
             wav_file_path = item_idx[idx]
             wav = ap.load_wav(wav_file_path)
             _, wavq_path, mel_path, wav_gl_path, wav_path = set_filename(wav_file_path, output_path)
@@ -229,7 +229,7 @@ def main(args):  # pylint: disable=redefined-outer-name
     ap = AudioProcessor(**c.audio)
 
     # load data instances
-    meta_data_train, meta_data_eval = load_tts_samples(c.datasets, eval_split=args.eval)
+    meta_data_train, meta_data_eval = load_train_eval_items(c.datasets, eval_split=args.eval)
 
     # use eval and training partitions
     meta_data = meta_data_train + meta_data_eval

@@ -26,7 +26,7 @@ tts --list_models
 Run a TTS model, from the release models list, with its default vocoder. (Simply copy and paste the full model names from the list as arguments for the command below.)
 
 ```bash
-tts --text "Text for TTS" \
+tts --char_ids "Text for TTS" \
     --model_name "<type>/<language>/<dataset>/<model_name>" \
     --out_path folder/to/save/output.wav
 ```
@@ -34,7 +34,7 @@ tts --text "Text for TTS" \
 Run a tts and a vocoder model from the released model list. Note that not every vocoder is compatible with every TTS model.
 
 ```bash
-tts --text "Text for TTS" \
+tts --char_ids "Text for TTS" \
     --model_name "<type>/<language>/<dataset>/<model_name>" \
     --vocoder_name "<type>/<language>/<dataset>/<model_name>" \
     --out_path folder/to/save/output.wav
@@ -43,7 +43,7 @@ tts --text "Text for TTS" \
 Run your own TTS model (Using Griffin-Lim Vocoder)
 
 ```bash
-tts --text "Text for TTS" \
+tts --char_ids "Text for TTS" \
     --model_path path/to/model.pth.tar \
     --config_path path/to/config.json \
     --out_path folder/to/save/output.wav
@@ -52,7 +52,7 @@ tts --text "Text for TTS" \
 Run your own TTS and Vocoder models
 
 ```bash
-tts --text "Text for TTS" \
+tts --char_ids "Text for TTS" \
     --config_path path/to/config.json \
     --model_path path/to/model.pth.tar \
     --out_path folder/to/save/output.wav \
@@ -64,7 +64,7 @@ Run a multi-speaker TTS model from the released models list.
 
 ```bash
 tts --model_name "<type>/<language>/<dataset>/<model_name>"  --list_speaker_idxs  # list the possible speaker IDs.
-tts --text "Text for TTS." --out_path output/path/speech.wav --model_name "<language>/<dataset>/<model_name>"  --speaker_idx "<speaker_id>"
+tts --char_ids "Text for TTS." --out_path output/path/speech.wav --model_name "<language>/<dataset>/<model_name>"  --speaker_idx "<speaker_id>"
 ```
 
 **Note:** You can use ```./TTS/bin/synthesize.py``` if you prefer running ```tts``` from the TTS project folder.

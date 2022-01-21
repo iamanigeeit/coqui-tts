@@ -61,20 +61,20 @@ class Tacotron2(keras.models.Model):
         self.postnet = Postnet(out_channels, 5, name="postnet")
 
     @tf.function(experimental_relax_shapes=True)
-    def call(self, characters, text_lengths=None, frames=None, training=None):
+    def call(self, char_ids, id_lengths=None, frames=None, training=None):
         if training:
-            return self.training(characters, text_lengths, frames)
+            return self.training(char_ids, id_lengths, frames)
         if not training:
-            return self.inference(characters)
+            return self.inference(char_ids)
         raise RuntimeError(" [!] Set model training mode True or False")
 
-    def training(self, characters, text_lengths, frames):
-        B, T = shape_list(characters)
-        embedding_vectors = self.embedding(characters, training=True)
+    def training(self, char_ids, id_lengths, frames):
+        B, T = shape_list(char_ids)
+        embedding_vectors = self.embedding(char_ids, training=True)
         encoder_output = self.encoder(embedding_vectors, training=True)
         decoder_states = self.decoder.build_decoder_initial_states(B, 512, T)
         decoder_frames, stop_tokens, attentions = self.decoder(
-            encoder_output, decoder_states, frames, text_lengths, training=True
+            encoder_output, decoder_states, frames, id_lengths, training=True
         )
         postnet_frames = self.postnet(decoder_frames, training=True)
         output_frames = decoder_frames + postnet_frames

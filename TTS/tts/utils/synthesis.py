@@ -6,7 +6,7 @@ import pkg_resources
 import torch
 from torch import nn
 
-from .text import phoneme_to_sequence, text_to_sequence
+from .text import text_to_phoneme_ids, text_to_symbol_ids
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
@@ -20,12 +20,12 @@ def text_to_seq(text, CONFIG, custom_symbols=None):
     # text ot phonemes to sequence vector
     if CONFIG.use_phonemes:
         seq = np.asarray(
-            phoneme_to_sequence(
+            text_to_phoneme_ids(
                 text,
                 text_cleaner,
                 CONFIG.phoneme_language,
                 CONFIG.enable_eos_bos_chars,
-                tp=CONFIG.characters,
+                character_config=CONFIG.characters,
                 add_blank=CONFIG.add_blank,
                 use_espeak_phonemes=CONFIG.use_espeak_phonemes,
                 custom_symbols=custom_symbols,
@@ -34,8 +34,8 @@ def text_to_seq(text, CONFIG, custom_symbols=None):
         )
     else:
         seq = np.asarray(
-            text_to_sequence(
-                text, text_cleaner, tp=CONFIG.characters, add_blank=CONFIG.add_blank, custom_symbols=custom_symbols
+            text_to_symbol_ids(
+                text, text_cleaner, character_config=CONFIG.characters, add_blank=CONFIG.add_blank, custom_symbols=custom_symbols
             ),
             dtype=np.int32,
         )

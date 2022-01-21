@@ -98,6 +98,9 @@ class CharactersConfig(Coqpit):
         check_argument("punctuations", c, prerequest="characters", restricted=True)
 
 
+"""
+Update: i have separated out all the configs which should belong to BaseDatasetConfig.
+"""
 @dataclass
 class BaseTTSConfig(BaseTrainingConfig):
     """Shared parameters among all the tts models.
@@ -116,9 +119,9 @@ class BaseTTSConfig(BaseTrainingConfig):
         compute_input_seq_cache (bool):
             enable / disable precomputation of the phoneme sequences. At the expense of some delay at the beginning of
             the training, It allows faster data loader time and precise limitation with `max_seq_len` and
-            `min_seq_len`.
+            `min_seq_len`. Deprecated as precomputation should always be done on Dataset init.
 
-        text_cleaner (str):
+        cleaner_name (str):
             Name of the text cleaner used for cleaning and formatting transcripts.
 
         enable_eos_bos_chars (bool):
@@ -127,7 +130,7 @@ class BaseTTSConfig(BaseTrainingConfig):
         test_senteces_file (str):
             Path to a txt file that has sentences used at test time. The file must have a sentence per line.
 
-        phoneme_cache_path (str):
+        phoneme_ids_cache_path (str):
             Path to the output folder caching the computed phonemes for each sample.
 
         characters (CharactersConfig):
@@ -150,7 +153,7 @@ class BaseTTSConfig(BaseTrainingConfig):
         max_seq_len (int):
             Maximum sequence length to be used at training. Larger values result in more VRAM usage.
 
-        compute_f0 (int):
+        use_f0 (int):
             (Not in use yet).
 
         compute_linear_spec (bool):
@@ -186,30 +189,26 @@ class BaseTTSConfig(BaseTrainingConfig):
     """
 
     audio: BaseAudioConfig = field(default_factory=BaseAudioConfig)
-    # phoneme settings
-    use_phonemes: bool = False
-    use_espeak_phonemes: bool = True
-    phoneme_language: str = None
-    compute_input_seq_cache: bool = False
-    text_cleaner: str = None
-    enable_eos_bos_chars: bool = False
-    test_sentences_file: str = ""
-    phoneme_cache_path: str = None
-    # vocabulary parameters
-    characters: CharactersConfig = None
+    character_config: dict = None
+    # What data should we load when training?
+    use_symbols: bool = False
+    use_phonemes: bool = True
+    use_mel: bool = True
+    use_linear: bool = False
+    use_wav: bool = False
+    use_f0: bool = False
     # training params
     batch_group_size: int = 0
     loss_masking: bool = None
     # dataloading
     sort_by_audio_len: bool = False
     min_seq_len: int = 1
-    max_seq_len: int = float("inf")
-    compute_f0: bool = False
-    compute_linear_spec: bool = False
+    max_seq_len: int = 2147483647
     use_noise_augment: bool = False
-    add_blank: bool = False
+    enable_eos_bos: bool = False
+    test_sentences_file: str = ""
     # dataset
-    datasets: List[BaseDatasetConfig] = field(default_factory=lambda: [BaseDatasetConfig()])
+    dataset_configs: List[BaseDatasetConfig] = field(default_factory=lambda: [BaseDatasetConfig()])
     # optimizer
     optimizer: str = None
     optimizer_params: dict = None

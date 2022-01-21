@@ -102,7 +102,7 @@ def ljspeech(root_path, meta_file):
         for line in ttf:
             cols = line.split("|")
             wav_file = os.path.join(root_path, "wavs", cols[0] + ".wav")
-            text = cols[2]
+            text = cols[2].strip()
             items.append([text, wav_file, speaker_name])
     return items
 
@@ -116,7 +116,7 @@ def ljspeech_test(root_path, meta_file):
         for idx, line in enumerate(ttf):
             cols = line.split("|")
             wav_file = os.path.join(root_path, "wavs", cols[0] + ".wav")
-            text = cols[2]
+            text = cols[2].strip()
             items.append([text, wav_file, f"ljspeech-{idx}"])
     return items
 
@@ -308,14 +308,14 @@ def mls(root_path, meta_files=None):
 # ======================================== VOX CELEB ===========================================
 def voxceleb2(root_path, meta_file=None):
     """
-    :param meta_file   Used only for consistency with load_tts_samples api
+    :param meta_file   Used only for consistency with load_train_eval_items api
     """
     return _voxcel_x(root_path, meta_file, voxcel_idx="2")
 
 
 def voxceleb1(root_path, meta_file=None):
     """
-    :param meta_file   Used only for consistency with load_tts_samples api
+    :param meta_file   Used only for consistency with load_train_eval_items api
     """
     return _voxcel_x(root_path, meta_file, voxcel_idx="1")
 

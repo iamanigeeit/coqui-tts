@@ -2,7 +2,7 @@ import os
 
 from TTS.trainer import Trainer, TrainingArgs
 from TTS.tts.configs.align_tts_config import AlignTTSConfig, BaseDatasetConfig
-from TTS.tts.datasets import load_tts_samples
+from TTS.tts.datasets import load_train_eval_items
 from TTS.tts.models.align_tts import AlignTTS
 from TTS.utils.audio import AudioProcessor
 
@@ -35,7 +35,7 @@ config = AlignTTSConfig(
 ap = AudioProcessor(**config.audio.to_dict())
 
 # load training samples
-train_samples, eval_samples = load_tts_samples(dataset_config, eval_split=True)
+train_samples, eval_samples = load_train_eval_items(dataset_config, eval_split=True)
 
 # init model
 model = AlignTTS(config)

@@ -55,7 +55,7 @@ them and fine-tune it for your own dataset. This will help you in two main ways:
     and the model path will be printed on the terminal.
 
     ```bash
-    tts --model_name tts_models/es/mai/tacotron2-DDC --text "Ola."
+    tts --model_name tts_models/es/mai/tacotron2-DDC --char_ids "Ola."
 
     > Downloading model to /home/ubuntu/.local/share/tts/tts_models--en--ljspeech--glow-tts
     ...

@@ -44,8 +44,8 @@ class Tacotron2(BaseTacotron):
         super().__init__(config)
 
         self.speaker_manager = speaker_manager
-        chars, self.config, _ = self.get_characters(config)
-        config.num_chars = len(chars)
+        # chars, self.config, _ = self.get_characters(config)
+        # config.num_chars = len(chars)
         self.decoder_output_dim = config.out_channels
 
         # pass all config fields to `self`
@@ -129,13 +129,13 @@ class Tacotron2(BaseTacotron):
         return mel_outputs, mel_outputs_postnet, alignments
 
     def forward(  # pylint: disable=dangerous-default-value
-        self, text, text_lengths, mel_specs=None, mel_lengths=None, aux_input={"speaker_ids": None, "d_vectors": None}
+        self, char_ids, id_lengths, mel_specs=None, mel_lengths=None, aux_input={"speaker_ids": None, "d_vectors": None}
     ):
         """Forward pass for training with Teacher Forcing.
 
         Shapes:
             text: :math:`[B, T_in]`
-            text_lengths: :math:`[B]`
+            id_lengths: :math:`[B]`
             mel_specs: :math:`[B, T_out, C]`
             mel_lengths: :math:`[B]`
             aux_input: 'speaker_ids': :math:`[B, 1]` and  'd_vectors': :math:`[B, C]`
@@ -144,11 +144,11 @@ class Tacotron2(BaseTacotron):
         outputs = {"alignments_backward": None, "decoder_outputs_backward": None}
         # compute mask for padding
         # B x T_in_max (boolean)
-        input_mask, output_mask = self.compute_masks(text_lengths, mel_lengths)
+        input_mask, output_mask = self.compute_masks(id_lengths, mel_lengths)
         # B x D_embed x T_in_max
-        embedded_inputs = self.embedding(text).transpose(1, 2)
+        embedded_inputs = self.embedding(char_ids).transpose(1, 2)
         # B x T_in_max x D_en
-        encoder_outputs = self.encoder(embedded_inputs, text_lengths)
+        encoder_outputs = self.encoder(embedded_inputs, id_lengths)
         if self.gst and self.use_gst:
             # B x gst_dim
             encoder_outputs = self.compute_gst(encoder_outputs, mel_specs)
@@ -203,7 +203,7 @@ class Tacotron2(BaseTacotron):
 
         Shapes:
            text: :math:`[B, T_in]`
-           text_lengths: :math:`[B]`
+           id_lengths: :math:`[B]`
         """
         aux_input = self._format_aux_input(aux_input)
         embedded_inputs = self.embedding(text).transpose(1, 2)
@@ -245,8 +245,8 @@ class Tacotron2(BaseTacotron):
             batch ([Dict]): A dictionary of input tensors.
             criterion ([type]): Callable criterion to compute model loss.
         """
-        text_input = batch["text_input"]
-        text_lengths = batch["text_lengths"]
+        char_ids = batch["char_ids"]
+        id_lengths = batch["id_lengths"]
         mel_input = batch["mel_input"]
         mel_lengths = batch["mel_lengths"]
         stop_targets = batch["stop_targets"]
@@ -256,8 +256,8 @@ class Tacotron2(BaseTacotron):
 
         # forward pass model
         outputs = self.forward(
-            text_input,
-            text_lengths,
+            char_ids,
+            id_lengths,
             mel_input,
             mel_lengths,
             aux_input={"speaker_ids": speaker_ids, "d_vectors": d_vectors},
@@ -269,10 +269,10 @@ class Tacotron2(BaseTacotron):
                 mel_lengths + (self.decoder.r - (mel_lengths.max() % self.decoder.r))
             ) // self.decoder.r
         else:
-            alignment_lengths = mel_lengths // self.decoder.r
+            alignment_lengths = torch.div(mel_lengths, self.decoder.r, rounding_mode='trunc')
 
         aux_input = {"speaker_ids": speaker_ids, "d_vectors": d_vectors}
-        outputs = self.forward(text_input, text_lengths, mel_input, mel_lengths, aux_input)
+        outputs = self.forward(char_ids, id_lengths, mel_input, mel_lengths, aux_input)
 
         # compute loss
         with autocast(enabled=False):  # use float32 for the criterion
@@ -289,7 +289,7 @@ class Tacotron2(BaseTacotron):
                 outputs["alignments"].float(),
                 alignment_lengths,
                 None if outputs["alignments_backward"] is None else outputs["alignments_backward"].float(),
-                text_lengths,
+                id_lengths,
             )
 
         # compute alignment error (the lower the better )

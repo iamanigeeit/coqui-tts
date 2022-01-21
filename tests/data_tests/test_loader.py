@@ -41,11 +41,11 @@ class TestTTSDataset(unittest.TestCase):
         dataset = TTSDataset(
             r,
             c.text_cleaner,
-            compute_linear_spec=True,
+            use_linear_spec=True,
             return_wav=True,
             ap=self.ap,
             meta_data=items,
-            characters=c.characters,
+            character_config=c.characters,
             batch_group_size=bgs,
             min_seq_len=c.min_seq_len,
             max_seq_len=float("inf"),
@@ -68,19 +68,19 @@ class TestTTSDataset(unittest.TestCase):
             for i, data in enumerate(dataloader):
                 if i == self.max_loader_iter:
                     break
-                text_input = data["text"]
-                text_lengths = data["text_lengths"]
+                char_ids = data["char_ids"]
+                id_lengths = data["id_lengths"]
                 speaker_name = data["speaker_names"]
                 linear_input = data["linear"]
                 mel_input = data["mel"]
                 mel_lengths = data["mel_lengths"]
                 stop_target = data["stop_targets"]
-                item_idx = data["item_idxs"]
+                wav_path = data["wav_path"]
                 wavs = data["waveform"]
 
-                neg_values = text_input[text_input < 0]
+                neg_values = char_ids[char_ids < 0]
                 check_count = len(neg_values)
-                assert check_count == 0, " !! Negative values in text_input: {}".format(check_count)
+                assert check_count == 0, " !! Negative values in char_ids: {}".format(check_count)
                 assert isinstance(speaker_name[0], str)
                 assert linear_input.shape[0] == c.batch_size
                 assert linear_input.shape[2] == self.ap.fft_size // 2 + 1
@@ -113,14 +113,14 @@ class TestTTSDataset(unittest.TestCase):
             for i, data in enumerate(dataloader):
                 if i == self.max_loader_iter:
                     break
-                text_input = data["text"]
-                text_lengths = data["text_lengths"]
+                char_ids = data["char_ids"]
+                id_lengths = data["id_lengths"]
                 speaker_name = data["speaker_names"]
                 linear_input = data["linear"]
                 mel_input = data["mel"]
                 mel_lengths = data["mel_lengths"]
                 stop_target = data["stop_targets"]
-                item_idx = data["item_idxs"]
+                wav_path = data["wav_path"]
 
                 avg_length = mel_lengths.numpy().mean()
                 assert avg_length >= last_length
@@ -139,17 +139,17 @@ class TestTTSDataset(unittest.TestCase):
             for i, data in enumerate(dataloader):
                 if i == self.max_loader_iter:
                     break
-                text_input = data["text"]
-                text_lengths = data["text_lengths"]
+                text_input = data["char_ids"]
+                text_lengths = data["id_lengths"]
                 speaker_name = data["speaker_names"]
                 linear_input = data["linear"]
                 mel_input = data["mel"]
                 mel_lengths = data["mel_lengths"]
                 stop_target = data["stop_targets"]
-                item_idx = data["item_idxs"]
+                wav_path = data["wav_path"]
 
                 # check mel_spec consistency
-                wav = np.asarray(self.ap.load_wav(item_idx[0]), dtype=np.float32)
+                wav = np.asarray(self.ap.load_wav(wav_path[0]), dtype=np.float32)
                 mel = self.ap.melspectrogram(wav).astype("float32")
                 mel = torch.FloatTensor(mel).contiguous()
                 mel_dl = mel_input[0]
@@ -162,13 +162,13 @@ class TestTTSDataset(unittest.TestCase):
                 mel_spec = mel_input[0].cpu().numpy()
                 wav = self.ap.inv_melspectrogram(mel_spec.T)
                 self.ap.save_wav(wav, OUTPATH + "/mel_inv_dataloader.wav")
-                shutil.copy(item_idx[0], OUTPATH + "/mel_target_dataloader.wav")
+                shutil.copy(wav_path[0], OUTPATH + "/mel_target_dataloader.wav")
 
                 # check linear-spec
                 linear_spec = linear_input[0].cpu().numpy()
                 wav = self.ap.inv_spectrogram(linear_spec.T)
                 self.ap.save_wav(wav, OUTPATH + "/linear_inv_dataloader.wav")
-                shutil.copy(item_idx[0], OUTPATH + "/linear_target_dataloader.wav")
+                shutil.copy(wav_path[0], OUTPATH + "/linear_target_dataloader.wav")
 
                 # check the last time step to be zero padded
                 assert linear_input[0, -1].sum() != 0
@@ -188,14 +188,14 @@ class TestTTSDataset(unittest.TestCase):
             for i, data in enumerate(dataloader):
                 if i == self.max_loader_iter:
                     break
-                text_input = data["text"]
-                text_lengths = data["text_lengths"]
+                text_input = data["char_ids"]
+                text_lengths = data["id_lengths"]
                 speaker_name = data["speaker_names"]
                 linear_input = data["linear"]
                 mel_input = data["mel"]
                 mel_lengths = data["mel_lengths"]
                 stop_target = data["stop_targets"]
-                item_idx = data["item_idxs"]
+                wav_path = data["wav_path"]
 
                 if mel_lengths[0] > mel_lengths[1]:
                     idx = 0

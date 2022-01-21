@@ -3,7 +3,7 @@ import os
 from TTS.config import BaseAudioConfig, BaseDatasetConfig
 from TTS.trainer import Trainer, TrainingArgs
 from TTS.tts.configs.speedy_speech_config import SpeedySpeechConfig
-from TTS.tts.datasets import load_tts_samples
+from TTS.tts.datasets import load_train_eval_items
 from TTS.tts.models.forward_tts import ForwardTTS
 from TTS.utils.audio import AudioProcessor
 
@@ -63,7 +63,7 @@ config = SpeedySpeechConfig(
 ap = AudioProcessor(**config.audio.to_dict())
 
 # load training samples
-train_samples, eval_samples = load_tts_samples(dataset_config, eval_split=True)
+train_samples, eval_samples = load_train_eval_items(dataset_config, eval_split=True)
 
 # init model
 model = ForwardTTS(config)

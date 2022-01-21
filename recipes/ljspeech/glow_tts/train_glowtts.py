@@ -9,7 +9,7 @@ from TTS.tts.configs.glow_tts_config import GlowTTSConfig
 
 # BaseDatasetConfig: defines name, formatter and path of the dataset.
 from TTS.tts.configs.shared_configs import BaseDatasetConfig
-from TTS.tts.datasets import load_tts_samples
+from TTS.tts.datasets import load_train_eval_items
 from TTS.tts.models.glow_tts import GlowTTS
 from TTS.utils.audio import AudioProcessor
 
@@ -52,9 +52,9 @@ ap = AudioProcessor(**config.audio.to_dict())
 # LOAD DATA SAMPLES
 # Each sample is a list of ```[text, audio_file_path, speaker_name]```
 # You can define your custom sample loader returning the list of samples.
-# Or define your custom formatter and pass it to the `load_tts_samples`.
-# Check `TTS.tts.datasets.load_tts_samples` for more details.
-train_samples, eval_samples = load_tts_samples(dataset_config, eval_split=True)
+# Or define your custom formatter and pass it to the `load_train_eval_items`.
+# Check `TTS.tts.datasets.load_train_eval_items` for more details.
+train_samples, eval_samples = load_train_eval_items(dataset_config, eval_split=True)
 
 # INITIALIZE THE MODEL
 # Models take a config object and a speaker manager as input

@@ -323,7 +323,7 @@ class ForwardTTS(BaseTTS):
         return o_dr
 
     def _forward_encoder(
-        self, x: torch.LongTensor, x_mask: torch.FloatTensor, g: torch.FloatTensor = None
+        self, x: torch.IntTensor, x_mask: torch.FloatTensor, g: torch.FloatTensor = None
     ) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
         """Encoding forward pass.
 
@@ -333,7 +333,7 @@ class ForwardTTS(BaseTTS):
         4. Sum encoder outputs and speaker embeddings
 
         Args:
-            x (torch.LongTensor): Input sequence IDs.
+            x (torch.IntTensor): Input sequence IDs.
             x_mask (torch.FloatTensor): Input squence mask.
             g (torch.FloatTensor, optional): Conditioning vectors. In general speaker embeddings. Defaults to None.
 
@@ -489,9 +489,9 @@ class ForwardTTS(BaseTTS):
 
     def forward(
         self,
-        x: torch.LongTensor,
-        x_lengths: torch.LongTensor,
-        y_lengths: torch.LongTensor,
+        x: torch.IntTensor,
+        x_lengths: torch.IntTensor,
+        y_lengths: torch.IntTensor,
         y: torch.FloatTensor = None,
         dr: torch.IntTensor = None,
         pitch: torch.FloatTensor = None,
@@ -500,9 +500,9 @@ class ForwardTTS(BaseTTS):
         """Model's forward pass.
 
         Args:
-            x (torch.LongTensor): Input character sequences.
-            x_lengths (torch.LongTensor): Input sequence lengths.
-            y_lengths (torch.LongTensor): Output sequnce lengths. Defaults to None.
+            x (torch.IntTensor): Input character sequences.
+            x_lengths (torch.IntTensor): Input sequence lengths.
+            y_lengths (torch.IntTensor): Output sequnce lengths. Defaults to None.
             y (torch.FloatTensor): Spectrogram frames. Only used when the alignment network is on. Defaults to None.
             dr (torch.IntTensor): Character durations over the spectrogram frames. Only used when the alignment network is off. Defaults to None.
             pitch (torch.FloatTensor): Pitch values for each spectrogram frame. Only used when the pitch predictor is on. Defaults to None.
@@ -575,7 +575,7 @@ class ForwardTTS(BaseTTS):
         """Model's inference pass.
 
         Args:
-            x (torch.LongTensor): Input character sequence.
+            x (torch.IntTensor): Input character sequence.
             aux_input (Dict): Auxiliary model inputs. Defaults to `{"d_vectors": None, "speaker_ids": None}`.
 
         Shapes:
@@ -608,8 +608,8 @@ class ForwardTTS(BaseTTS):
         return outputs
 
     def train_step(self, batch: dict, criterion: nn.Module):
-        text_input = batch["text_input"]
-        text_lengths = batch["text_lengths"]
+        char_ids = batch["char_ids"]
+        id_lengths = batch["id_lengths"]
         mel_input = batch["mel_input"]
         mel_lengths = batch["mel_lengths"]
         pitch = batch["pitch"] if self.args.use_pitch else None
@@ -620,7 +620,7 @@ class ForwardTTS(BaseTTS):
 
         # forward pass
         outputs = self.forward(
-            text_input, text_lengths, mel_lengths, y=mel_input, dr=durations, pitch=pitch, aux_input=aux_input
+            char_ids, id_lengths, mel_lengths, y=mel_input, dr=durations, pitch=pitch, aux_input=aux_input
         )
         # use aligner's output as the duration target
         if self.use_aligner:
@@ -636,14 +636,14 @@ class ForwardTTS(BaseTTS):
                 dur_target=durations,
                 pitch_output=outputs["pitch_avg"] if self.use_pitch else None,
                 pitch_target=outputs["pitch_avg_gt"] if self.use_pitch else None,
-                input_lens=text_lengths,
+                input_lens=id_lengths,
                 alignment_logprob=outputs["alignment_logprob"] if self.use_aligner else None,
                 alignment_soft=outputs["alignment_soft"] if self.use_binary_alignment_loss else None,
                 alignment_hard=outputs["alignment_mas"] if self.use_binary_alignment_loss else None,
             )
             # compute duration error
             durations_pred = outputs["durations"]
-            duration_error = torch.abs(durations - durations_pred).sum() / text_lengths.sum()
+            duration_error = torch.abs(durations - durations_pred).sum() / id_lengths.sum()
             loss_dict["duration_error"] = duration_error
 
         return outputs, loss_dict

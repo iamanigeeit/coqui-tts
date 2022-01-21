@@ -3,7 +3,7 @@ import os
 from TTS.config.shared_configs import BaseAudioConfig, BaseDatasetConfig
 from TTS.trainer import Trainer, TrainingArgs
 from TTS.tts.configs.fast_pitch_config import FastPitchConfig
-from TTS.tts.datasets import load_tts_samples
+from TTS.tts.datasets import load_train_eval_items
 from TTS.tts.models.forward_tts import ForwardTTS
 from TTS.utils.audio import AudioProcessor
 from TTS.utils.manage import ModelManager
@@ -71,7 +71,7 @@ if not config.model_args.use_aligner:
 ap = AudioProcessor(**config.audio)
 
 # load training samples
-train_samples, eval_samples = load_tts_samples(dataset_config, eval_split=True)
+train_samples, eval_samples = load_train_eval_items(dataset_config, eval_split=True)
 
 # init the model
 model = ForwardTTS(config)

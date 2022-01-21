@@ -346,8 +346,8 @@ class GlowTTS(BaseTTS):
             batch (dict): [description]
             criterion (nn.Module): [description]
         """
-        text_input = batch["text_input"]
-        text_lengths = batch["text_lengths"]
+        char_ids = batch["char_ids"]
+        id_lengths = batch["id_lengths"]
         mel_input = batch["mel_input"]
         mel_lengths = batch["mel_lengths"]
         d_vectors = batch["d_vectors"]
@@ -358,8 +358,8 @@ class GlowTTS(BaseTTS):
             self.unlock_act_norm_layers()
             with torch.no_grad():
                 _ = self.forward(
-                    text_input,
-                    text_lengths,
+                    char_ids,
+                    id_lengths,
                     mel_input,
                     mel_lengths,
                     aux_input={"d_vectors": d_vectors, "speaker_ids": speaker_ids},
@@ -370,8 +370,8 @@ class GlowTTS(BaseTTS):
         else:
             # normal training step
             outputs = self.forward(
-                text_input,
-                text_lengths,
+                char_ids,
+                id_lengths,
                 mel_input,
                 mel_lengths,
                 aux_input={"d_vectors": d_vectors, "speaker_ids": speaker_ids},
@@ -386,22 +386,22 @@ class GlowTTS(BaseTTS):
                     mel_lengths,
                     outputs["durations_log"].float(),
                     outputs["total_durations_log"].float(),
-                    text_lengths,
+                    id_lengths,
                 )
         return outputs, loss_dict
 
     def _create_logs(self, batch, outputs, ap):
         alignments = outputs["alignments"]
-        text_input = batch["text_input"][:1] if batch["text_input"] is not None else None
-        text_lengths = batch["text_lengths"]
+        char_ids = batch["char_ids"][:1] if batch["char_ids"] is not None else None
+        id_lengths = batch["id_lengths"]
         mel_input = batch["mel_input"]
         d_vectors = batch["d_vectors"][:1] if batch["d_vectors"] is not None else None
         speaker_ids = batch["speaker_ids"][:1] if batch["speaker_ids"] is not None else None
 
         # model runs reverse flow to predict spectrograms
         pred_outputs = self.inference(
-            text_input,
-            aux_input={"x_lengths": text_lengths[:1], "d_vectors": d_vectors, "speaker_ids": speaker_ids},
+            char_ids,
+            aux_input={"x_lengths": id_lengths[:1], "d_vectors": d_vectors, "speaker_ids": speaker_ids},
         )
         model_outputs = pred_outputs["model_outputs"]
 

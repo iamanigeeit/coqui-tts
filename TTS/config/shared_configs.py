@@ -1,5 +1,5 @@
 from dataclasses import asdict, dataclass
-from typing import List
+from typing import List, Tuple, Dict
 
 from coqpit import Coqpit, check_argument
 
@@ -38,7 +38,7 @@ class BaseAudioConfig(Coqpit):
         preemphasis (float):
             Preemphasis coefficient. Defaults to 0.0.
 
-        ref_level_db (int): 20
+        ref_level_db (float): 20
             Reference Db level to rebase the audio signal and ignore the level below. 20Db is assumed the sound of air.
             Defaults to 20.
 
@@ -57,7 +57,7 @@ class BaseAudioConfig(Coqpit):
         do_amp_to_db_mel (bool, optional):
             enable/disable amplitude to dB conversion of mel spectrograms. Defaults to True.
 
-        trim_db (int):
+        trim_db (float):
             Silence threshold used for silence trimming. Defaults to 45.
 
         power (float):
@@ -76,7 +76,7 @@ class BaseAudioConfig(Coqpit):
         mel_fmax (float):
             Max frequency level used for the mel-basis filters. It needs to be adjusted for a dataset.
 
-        spec_gain (int):
+        spec_gain (float):
             Gain applied when converting amplitude to DB. Defaults to 20.
 
         signal_norm (bool):
@@ -110,12 +110,12 @@ class BaseAudioConfig(Coqpit):
     sample_rate: int = 22050
     resample: bool = False
     preemphasis: float = 0.0
-    ref_level_db: int = 20
+    ref_level_db: float = 20.0
     do_sound_norm: bool = False
     log_func: str = "np.log10"
     # silence trimming
     do_trim_silence: bool = True
-    trim_db: int = 45
+    trim_db: float = 45.0
     # griffin-lim params
     power: float = 1.5
     griffin_lim_iters: int = 60
@@ -123,7 +123,7 @@ class BaseAudioConfig(Coqpit):
     num_mels: int = 80
     mel_fmin: float = 0.0
     mel_fmax: float = None
-    spec_gain: int = 20
+    spec_gain: float = 20.0
     do_amp_to_db_linear: bool = True
     do_amp_to_db_mel: bool = True
     # normalization params
@@ -175,10 +175,10 @@ class BaseDatasetConfig(Coqpit):
 
     Args:
         name (str):
-            Dataset name that defines the preprocessor in use. Defaults to None.
+            Dataset name that defines the preprocessor in use. Defaults empty string.
 
-        path (str):
-            Root path to the dataset files. Defaults to None.
+        root_path (str):
+            Root path to the dataset files. Defaults to empty string.
 
         meta_file_train (str):
             Name of the dataset meta file. Or a list of speakers to be ignored at training for multi-speaker datasets.
@@ -193,14 +193,48 @@ class BaseDatasetConfig(Coqpit):
         meta_file_attn_mask (str):
             Path to the file that lists the attention mask files used with models that require attention masks to
             train the duration predictor.
+
+        train_df_file (str):
+            Name of the train items file. Defaults to empty string.
+            If provided, train_items will be loaded directly from here. Otherwise, items will be extracted
+            from meta_file_train and saved.
+
+        val_df_file (str):
+            Name of the validation items file. Defaults to empty string.
+            If provided, val_items will be loaded directly from here. Otherwise, items will be extracted from meta_file_val.
+
+        split_ratios (Tuple):
+            Proportion of dataset to use for (train, val, test). Defaults to (0.8, 0.1, 0.1).
+            If None, train_items_file must be provided.
+
+        use_phonemes (bool):
+            If True, the dataset to load uses phonemes as input instead of raw text. Default True.
+
     """
 
     name: str = ""
-    path: str = ""
+    root_path: str = ""
     meta_file_train: str = ""
     ununsed_speakers: List[str] = None
     meta_file_val: str = ""
     meta_file_attn_mask: str = ""
+    train_df_file: str = ""
+    val_df_file: str = ""
+    split_ratios: Tuple[float, float, float] = (0.8, 0.1, 0.1)
+    cleaner_name: str = ""
+    symbol_ids_cache_path: str = ""
+    phoneme_ids_cache_path: str = ""
+    mel_cache_path: str = ""
+    linear_cache_path: str = ""
+    f0_cache_path: str = ""
+    character_config: Dict = None
+    custom_symbols: List = None
+    custom_phonemes: List = None
+    add_blank: bool = False
+    phoneme_language: str = "en-us"
+    phonemizer_args: Dict = None
+    use_espeak_phonemes: bool = False
+
 
     def check_values(
         self,
@@ -208,7 +242,7 @@ class BaseDatasetConfig(Coqpit):
         """Check config fields"""
         c = asdict(self)
         check_argument("name", c, restricted=True)
-        check_argument("path", c, restricted=True)
+        check_argument("root_path", c, restricted=True)
         check_argument("meta_file_train", c, restricted=True)
         check_argument("meta_file_val", c, restricted=False)
         check_argument("meta_file_attn_mask", c, restricted=False)

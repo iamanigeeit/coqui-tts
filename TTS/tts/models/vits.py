@@ -526,8 +526,8 @@ class Vits(BaseTTS):
             raise ValueError(" [!] Unexpected `optimizer_idx`.")
 
         if optimizer_idx == 0:
-            text_input = batch["text_input"]
-            text_lengths = batch["text_lengths"]
+            char_ids = batch["char_ids"]
+            id_lengths = batch["id_lengths"]
             mel_lengths = batch["mel_lengths"]
             linear_input = batch["linear_input"]
             d_vectors = batch["d_vectors"]
@@ -536,8 +536,8 @@ class Vits(BaseTTS):
 
             # generator pass
             outputs = self.forward(
-                text_input,
-                text_lengths,
+                char_ids,
+                id_lengths,
                 linear_input.transpose(1, 2),
                 mel_lengths,
                 aux_input={"d_vectors": d_vectors, "speaker_ids": speaker_ids},
@@ -740,7 +740,7 @@ class Vits(BaseTTS):
         whole training and inference steps."""
         _pad = config.characters["pad"]
         _punctuations = config.characters["punctuations"]
-        _letters = config.characters["characters"]
+        _letters = config.characters["character_config"]
         _letters_ipa = config.characters["phonemes"]
         symbols = [_pad] + list(_punctuations) + list(_letters)
         if config.use_phonemes:

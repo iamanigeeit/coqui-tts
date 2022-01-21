@@ -338,15 +338,15 @@ class AlignTTS(BaseTTS):
         return outputs
 
     def train_step(self, batch: dict, criterion: nn.Module):
-        text_input = batch["text_input"]
-        text_lengths = batch["text_lengths"]
+        char_ids = batch["char_ids"]
+        id_lengths = batch["id_lengths"]
         mel_input = batch["mel_input"]
         mel_lengths = batch["mel_lengths"]
         d_vectors = batch["d_vectors"]
         speaker_ids = batch["speaker_ids"]
 
         aux_input = {"d_vectors": d_vectors, "speaker_ids": speaker_ids}
-        outputs = self.forward(text_input, text_lengths, mel_input, mel_lengths, aux_input, self.phase)
+        outputs = self.forward(char_ids, id_lengths, mel_input, mel_lengths, aux_input, self.phase)
         loss_dict = criterion(
             outputs["logp"],
             outputs["model_outputs"],
@@ -354,7 +354,7 @@ class AlignTTS(BaseTTS):
             mel_lengths,
             outputs["durations_log"],
             outputs["durations_mas_log"],
-            text_lengths,
+            id_lengths,
             phase=self.phase,
         )
 

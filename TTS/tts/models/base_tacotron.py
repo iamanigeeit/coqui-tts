@@ -111,10 +111,10 @@ class BaseTacotron(BaseTTS):
     # COMMON COMPUTE FUNCTIONS
     #############################
 
-    def compute_masks(self, text_lengths, mel_lengths):
+    def compute_masks(self, id_lengths, mel_lengths):
         """Compute masks  against sequence paddings."""
         # B x T_in_max (boolean)
-        input_mask = sequence_mask(text_lengths)
+        input_mask = sequence_mask(id_lengths)
         output_mask = None
         if mel_lengths is not None:
             max_len = mel_lengths.max()

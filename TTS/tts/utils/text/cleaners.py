@@ -126,6 +126,7 @@ def chinese_mandarin_cleaners(text: str) -> str:
     return text
 
 
+# TODO: this seems unnecessary. Graphemes should be cleaned, not phonemes.
 def phoneme_cleaners(text):
     """Pipeline for phonemes mode, including number and abbreviation expansion."""
     text = expand_numbers(text)

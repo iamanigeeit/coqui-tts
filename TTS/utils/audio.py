@@ -643,7 +643,7 @@ class AudioProcessor(object):
             >>> conf = BaseAudioConfig(mel_fmax=8000)
             >>> ap = AudioProcessor(**conf)
             >>> wav = ap.load_wav(WAV_FILE, sr=22050)[:5 * 22050]
-            >>> pitch = ap.compute_f0(wav)
+            >>> pitch = ap.use_f0(wav)
         """
         # align F0 length to the spectrogram length
         if len(x) % self.hop_length == 0:

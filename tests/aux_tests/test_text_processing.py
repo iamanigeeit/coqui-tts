@@ -1,7 +1,7 @@
 """Tests for text to phoneme converstion"""
 import unittest
 
-from TTS.tts.utils.text import phoneme_to_sequence, sequence_to_phoneme, text2phone
+from TTS.tts.utils.text import text_to_phoneme_ids, phoneme_ids_to_phones, text_to_phones
 
 # -----------------------------------------------------------------------------
 
@@ -28,18 +28,18 @@ class TextProcessingTextCase(unittest.TestCase):
     def _test_phoneme_to_sequence(self, add_blank):
         """Verify en-us sentence phonemes"""
         text_cleaner = ["phoneme_cleaners"]
-        sequence = phoneme_to_sequence(EXAMPLE_TEXT, text_cleaner, LANG, add_blank=add_blank, use_espeak_phonemes=True)
-        text_hat = sequence_to_phoneme(sequence)
-        text_hat_with_params = sequence_to_phoneme(sequence)
+        sequence = text_to_phoneme_ids(EXAMPLE_TEXT, text_cleaner, LANG, add_blank=add_blank, use_espeak_phonemes=True)
+        text_hat = phoneme_ids_to_phones(sequence)
+        text_hat_with_params = phoneme_ids_to_phones(sequence)
         gt = EXPECTED_PHONEMES.replace("|", "")
         self.assertEqual(text_hat, text_hat_with_params)
         self.assertEqual(text_hat, gt)
 
         # multiple punctuations
         text = "Be a voice, not an! echo?"
-        sequence = phoneme_to_sequence(text, text_cleaner, LANG, add_blank=add_blank, use_espeak_phonemes=True)
-        text_hat = sequence_to_phoneme(sequence)
-        text_hat_with_params = sequence_to_phoneme(sequence)
+        sequence = text_to_phoneme_ids(text, text_cleaner, LANG, add_blank=add_blank, use_espeak_phonemes=True)
+        text_hat = phoneme_ids_to_phones(sequence)
+        text_hat_with_params = phoneme_ids_to_phones(sequence)
         gt = "biː ɐ vɔɪs , nɑːt ɐn ! ɛkoʊ ?"
         print(text_hat)
         print(len(sequence))
@@ -48,9 +48,9 @@ class TextProcessingTextCase(unittest.TestCase):
 
         # not ending with punctuation
         text = "Be a voice, not an! echo"
-        sequence = phoneme_to_sequence(text, text_cleaner, LANG, add_blank=add_blank, use_espeak_phonemes=True)
-        text_hat = sequence_to_phoneme(sequence)
-        text_hat_with_params = sequence_to_phoneme(sequence)
+        sequence = text_to_phoneme_ids(text, text_cleaner, LANG, add_blank=add_blank, use_espeak_phonemes=True)
+        text_hat = phoneme_ids_to_phones(sequence)
+        text_hat_with_params = phoneme_ids_to_phones(sequence)
         gt = "biː ɐ vɔɪs , nɑːt ɐn ! ɛkoʊ"
         print(text_hat)
         print(len(sequence))
@@ -59,9 +59,9 @@ class TextProcessingTextCase(unittest.TestCase):
 
         # original
         text = "Be a voice, not an echo!"
-        sequence = phoneme_to_sequence(text, text_cleaner, LANG, add_blank=add_blank, use_espeak_phonemes=True)
-        text_hat = sequence_to_phoneme(sequence)
-        text_hat_with_params = sequence_to_phoneme(sequence)
+        sequence = text_to_phoneme_ids(text, text_cleaner, LANG, add_blank=add_blank, use_espeak_phonemes=True)
+        text_hat = phoneme_ids_to_phones(sequence)
+        text_hat_with_params = phoneme_ids_to_phones(sequence)
         gt = "biː ɐ vɔɪs , nɑːt ɐn ɛkoʊ !"
         print(text_hat)
         print(len(sequence))
@@ -70,9 +70,9 @@ class TextProcessingTextCase(unittest.TestCase):
 
         # extra space after the sentence
         text = "Be a voice, not an! echo.  "
-        sequence = phoneme_to_sequence(text, text_cleaner, LANG, add_blank=add_blank, use_espeak_phonemes=True)
-        text_hat = sequence_to_phoneme(sequence)
-        text_hat_with_params = sequence_to_phoneme(sequence)
+        sequence = text_to_phoneme_ids(text, text_cleaner, LANG, add_blank=add_blank, use_espeak_phonemes=True)
+        text_hat = phoneme_ids_to_phones(sequence)
+        text_hat_with_params = phoneme_ids_to_phones(sequence)
         gt = "biː ɐ vɔɪs , nɑːt ɐn ! ɛkoʊ ."
         print(text_hat)
         print(len(sequence))
@@ -81,11 +81,11 @@ class TextProcessingTextCase(unittest.TestCase):
 
         # extra space after the sentence
         text = "Be a voice, not an! echo.  "
-        sequence = phoneme_to_sequence(
+        sequence = text_to_phoneme_ids(
             text, text_cleaner, LANG, enable_eos_bos=True, add_blank=add_blank, use_espeak_phonemes=True
         )
-        text_hat = sequence_to_phoneme(sequence)
-        text_hat_with_params = sequence_to_phoneme(sequence)
+        text_hat = phoneme_ids_to_phones(sequence)
+        text_hat_with_params = phoneme_ids_to_phones(sequence)
         gt = "^biː ɐ vɔɪs , nɑːt ɐn ! ɛkoʊ .~"
         print(text_hat)
         print(len(sequence))
@@ -94,7 +94,7 @@ class TextProcessingTextCase(unittest.TestCase):
 
     def test_text2phone(self):
         """Verify phones directly (with |)"""
-        ph = text2phone(EXAMPLE_TEXT, LANG, use_espeak_phonemes=True)
+        ph = text_to_phones(EXAMPLE_TEXT, LANG, use_espeak_phonemes=True, phone_sep='|', word_sep='| ')
         self.assertEqual(ph, EXPECTED_PHONEMES)
 
 

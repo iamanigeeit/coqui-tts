@@ -12,10 +12,10 @@ class DurationPredictor(nn.Module):
         self.FFT = FFTransformerBlock(hidden_channels, num_heads, hidden_channels_ffn, 2, 0.1)
         self.out_layer = nn.Conv1d(hidden_channels, 1, 1)
 
-    def forward(self, text, text_lengths):
+    def forward(self, char_ids, id_lengths):
         # B, L -> B, L
-        emb = self.embed(text)
+        emb = self.embed(char_ids)
         emb = self.pos_enc(emb.transpose(1, 2))
-        x = self.FFT(emb, text_lengths)
+        x = self.FFT(emb, id_lengths)
         x = self.out_layer(x).squeeze(-1)
         return x
