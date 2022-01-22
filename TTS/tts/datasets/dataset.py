@@ -144,7 +144,7 @@ class TTSDataset(Dataset):
             self.char_ids_all = [np.load(get_npy_path(char_ids_cache_path, item[1])) for item in self.items]
             self.id_lengths = np.array([len(char_ids) for char_ids in self.char_ids_all], dtype=np.int32)
 
-        # TODO: stop hardcording?
+        # TODO: stop hardcoding?
         self.eos_id = 1
         self.bos_id = 2
         

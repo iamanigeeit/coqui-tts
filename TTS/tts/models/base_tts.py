@@ -184,62 +184,74 @@ class BaseTTS(BaseModel):
         rank: int = None,
     ) -> "DataLoader":
         if is_eval and not config.run_eval:
-            loader = None
+            return None
+
+        if is_eval:
+            batch_group_size = 0
+            use_noise_augment = False
+            num_workers = config.num_eval_loader_workers
+            batch_size = config.eval_batch_size
+            data_split = "eval_dataset"
         else:
-            ap = assets["audio_processor"]
+            batch_group_size = config.batch_group_size * config.batch_size
+            use_noise_augment = config.use_noise_augment
+            num_workers = config.num_loader_workers
+            batch_size = config.batch_size
+            data_split = "train_dataset"
+        ap = assets["audio_processor"]
 
-            # setup multi-speaker attributes
-            if hasattr(self, "speaker_manager") and self.speaker_manager is not None:
-                speaker_id_mapping = self.speaker_manager.speaker_ids if config.use_speaker_embedding else None
-                d_vector_mapping = self.speaker_manager.d_vectors if config.use_d_vector_file else None
-            else:
-                speaker_id_mapping = None
-                d_vector_mapping = None
+        # setup multi-speaker attributes
+        if hasattr(self, "speaker_manager") and self.speaker_manager is not None:
+            speaker_id_mapping = self.speaker_manager.speaker_ids if config.use_speaker_embedding else None
+            d_vector_mapping = self.speaker_manager.d_vectors if config.use_d_vector_file else None
+        else:
+            speaker_id_mapping = None
+            d_vector_mapping = None
 
-            # init dataset
-            if hasattr(self, "dataset"):
-                dataset = self.dataset
-            else:
-                dataset = TTSDataset(
-                    dataset_config=config.dataset_configs[0],  # TODO: figure out how to combine datasets later
-                    ap=ap,
-                    items=data_items,
-                    outputs_per_step=config.r if "r" in config else 1,
-                    use_symbols=config.use_symbols,
-                    use_phonemes=config.use_phonemes,
-                    use_mel=config.use_mel,
-                    use_linear=config.use_linear,
-                    use_wav=config.use_wav,
-                    use_f0=config.use_f0,
-                    batch_group_size=0 if is_eval else config.batch_group_size * config.batch_size,
-                    min_seq_len=config.min_seq_len,
-                    max_seq_len=config.max_seq_len,
-                    enable_eos_bos=config.enable_eos_bos,
-                    use_noise_augment=not is_eval,
-                    speaker_id_mapping=speaker_id_mapping,
-                    d_vector_mapping=d_vector_mapping if config.use_d_vector_file else None,
-                    verbose=verbose,
-                )
-                # sort input sequences from short to long
-                dataset.sort_and_filter_items(config.get("sort_by_audio_len", default=False))
-
-                self.dataset = dataset
-
-
-            # sampler for DDP
-            sampler = DistributedSampler(dataset) if num_gpus > 1 else None
-
-            # init dataloader
-            loader = DataLoader(
-                dataset,
-                batch_size=config.eval_batch_size if is_eval else config.batch_size,
-                shuffle=False,
-                collate_fn=dataset.collate_fn,
-                drop_last=False,
-                sampler=sampler,
-                num_workers=config.num_eval_loader_workers if is_eval else config.num_loader_workers,
-                pin_memory=False,
+        # init dataset
+        if hasattr(self, data_split):
+            dataset = getattr(self, data_split)
+        else:
+            dataset = TTSDataset(
+                dataset_config=config.dataset_configs[0],  # TODO: figure out how to combine datasets later
+                ap=ap,
+                items=data_items,
+                outputs_per_step=config.r if "r" in config else 1,
+                use_symbols=config.use_symbols,
+                use_phonemes=config.use_phonemes,
+                use_mel=config.use_mel,
+                use_linear=config.use_linear,
+                use_wav=config.use_wav,
+                use_f0=config.use_f0,
+                batch_group_size=batch_group_size,
+                min_seq_len=config.min_seq_len,
+                max_seq_len=config.max_seq_len,
+                enable_eos_bos=config.enable_eos_bos,
+                use_noise_augment=use_noise_augment,
+                speaker_id_mapping=speaker_id_mapping,
+                d_vector_mapping=d_vector_mapping if config.use_d_vector_file else None,
+                verbose=verbose,
             )
+            # sort input sequences from short to long
+            dataset.sort_and_filter_items(config.get("sort_by_audio_len", default=False))
+
+            setattr(self, data_split, dataset)
+
+
+        # sampler for DDP
+        sampler = DistributedSampler(dataset) if num_gpus > 1 else None
+
+        # init dataloader
+        loader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            collate_fn=dataset.collate_fn,
+            drop_last=False,
+            sampler=sampler,
+            num_workers=num_workers,
+            pin_memory=False,
+        )
         return loader
 
     def _get_test_aux_input(
@@ -287,7 +299,7 @@ class BaseTTS(BaseModel):
                 speaker_id=aux_inputs["speaker_id"],
                 d_vector=aux_inputs["d_vector"],
                 style_wav=aux_inputs["style_wav"],
-                enable_eos_bos_chars=self.config.enable_eos_bos_chars,
+                enable_eos_bos=self.config.enable_eos_bos,
                 use_griffin_lim=True,
                 do_trim_silence=False,
             )

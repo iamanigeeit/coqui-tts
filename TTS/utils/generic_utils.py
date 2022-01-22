@@ -58,7 +58,7 @@ def get_commit_hash():
 
 def get_experiment_folder_path(root_path, model_name):
     """Get an experiment folder path with the current date and time"""
-    date_str = datetime.datetime.now().strftime("%B-%d-%Y_%I+%M%p")
+    date_str = datetime.datetime.now().strftime("%Y%m%d_%H%M")
     commit_hash = get_commit_hash()
     output_folder = os.path.join(root_path, model_name + "-" + date_str + "-" + commit_hash)
     return output_folder
@@ -70,8 +70,8 @@ def remove_experiment_folder(experiment_path):
     checkpoint_files = fs.glob(experiment_path + "/*.pth.tar")
     if not checkpoint_files:
         if fs.exists(experiment_path):
-            fs.rm(experiment_path, recursive=True)
             print(" ! Run is removed from {}".format(experiment_path))
+            fs.rm(experiment_path, recursive=True)
     else:
         print(" ! Run is kept in {}".format(experiment_path))
 

@@ -5,7 +5,7 @@ import numpy as np
 import pkg_resources
 import torch
 from torch import nn
-
+import gruut
 from .text import text_to_phoneme_ids, text_to_symbol_ids
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
@@ -14,32 +14,41 @@ installed = {pkg.key for pkg in pkg_resources.working_set}  # pylint: disable=no
 if "tensorflow" in installed or "tensorflow-gpu" in installed:
     import tensorflow as tf
 
+phonemizer = None
 
-def text_to_seq(text, CONFIG, custom_symbols=None):
-    text_cleaner = [CONFIG.text_cleaner]
-    # text ot phonemes to sequence vector
-    if CONFIG.use_phonemes:
+def text_to_seq(text, use_phonemes, dataset_config, enable_eos_bos, custom_symbols=None):
+    phoneme_language = dataset_config.phoneme_language
+    phonemizer_args = dataset_config.phonemizer_args
+    cleaner_name = dataset_config.cleaner_name
+    character_config = dataset_config.character_config
+    add_blank = dataset_config.add_blank
+    if use_phonemes:
+        global phonemizer
+        if phonemizer is None:
+            phonemizer = gruut.get_phonemizer(phoneme_language, **phonemizer_args)
         seq = np.asarray(
             text_to_phoneme_ids(
                 text,
-                text_cleaner,
-                CONFIG.phoneme_language,
-                CONFIG.enable_eos_bos_chars,
-                character_config=CONFIG.characters,
-                add_blank=CONFIG.add_blank,
-                use_espeak_phonemes=CONFIG.use_espeak_phonemes,
+                cleaner_name=cleaner_name,
+                phonemizer=phonemizer,
+                language=phoneme_language,
                 custom_symbols=custom_symbols,
+                character_config=character_config,
+                add_blank=add_blank,
             ),
             dtype=np.int32,
         )
     else:
-        seq = np.asarray(
-            text_to_symbol_ids(
-                text, text_cleaner, character_config=CONFIG.characters, add_blank=CONFIG.add_blank, custom_symbols=custom_symbols
-            ),
-            dtype=np.int32,
-        )
-    return seq
+        seq = text_to_symbol_ids(
+            text,
+            cleaner_name=cleaner_name,
+            character_config=character_config,
+            add_blank=dataset_config.add_blank,
+            custom_symbols=custom_symbols,
+        ),
+    if enable_eos_bos:
+        seq = [2] + seq + [1]  # TODO: stop hardcoding
+    return np.asarray(seq, dtype=np.int32)
 
 
 def numpy_to_torch(np_array, dtype, cuda=False):
@@ -204,7 +213,7 @@ def synthesis(
     ap,
     speaker_id=None,
     style_wav=None,
-    enable_eos_bos_chars=False,  # pylint: disable=unused-argument
+    enable_eos_bos=False,  # pylint: disable=unused-argument
     use_griffin_lim=False,
     do_trim_silence=False,
     d_vector=None,
@@ -258,7 +267,8 @@ def synthesis(
     if hasattr(model, "make_symbols"):
         custom_symbols = model.make_symbols(CONFIG)
     # preprocess the given text
-    text_inputs = text_to_seq(text, CONFIG, custom_symbols=custom_symbols)
+    char_ids = text_to_seq(text, use_phonemes=CONFIG.use_phonemes, dataset_config=CONFIG.dataset_configs[0],
+                           enable_eos_bos=enable_eos_bos, custom_symbols=custom_symbols)
     # pass tensors to backend
     if backend == "torch":
         if speaker_id is not None:
@@ -269,29 +279,29 @@ def synthesis(
 
         if not isinstance(style_mel, dict):
             style_mel = numpy_to_torch(style_mel, torch.float, cuda=use_cuda)
-        text_inputs = numpy_to_torch(text_inputs, torch.long, cuda=use_cuda)
-        text_inputs = text_inputs.unsqueeze(0)
+        char_ids = numpy_to_torch(char_ids, torch.long, cuda=use_cuda)
+        char_ids = char_ids.unsqueeze(0)
     elif backend in ["tf", "tflite"]:
         # TODO: handle speaker id for tf model
         style_mel = numpy_to_tf(style_mel, tf.float32)
-        text_inputs = numpy_to_tf(text_inputs, tf.int32)
-        text_inputs = tf.expand_dims(text_inputs, 0)
+        char_ids = numpy_to_tf(char_ids, tf.int32)
+        char_ids = tf.expand_dims(char_ids, 0)
     # synthesize voice
     if backend == "torch":
-        outputs = run_model_torch(model, text_inputs, speaker_id, style_mel, d_vector=d_vector)
+        outputs = run_model_torch(model, char_ids, speaker_id, style_mel, d_vector=d_vector)
         model_outputs = outputs["model_outputs"]
         model_outputs = model_outputs[0].data.cpu().numpy()
         alignments = outputs["alignments"]
     elif backend == "tf":
         decoder_output, postnet_output, alignments, stop_tokens = run_model_tf(
-            model, text_inputs, CONFIG, speaker_id, style_mel
+            model, char_ids, CONFIG, speaker_id, style_mel
         )
         model_outputs, decoder_output, alignments, stop_tokens = parse_outputs_tf(
             postnet_output, decoder_output, alignments, stop_tokens
         )
     elif backend == "tflite":
         decoder_output, postnet_output, alignments, stop_tokens = run_model_tflite(
-            model, text_inputs, CONFIG, speaker_id, style_mel
+            model, char_ids, CONFIG, speaker_id, style_mel
         )
         model_outputs, decoder_output = parse_outputs_tflite(postnet_output, decoder_output)
     # convert outputs to numpy
@@ -308,7 +318,7 @@ def synthesis(
     return_dict = {
         "wav": wav,
         "alignments": alignments,
-        "text_inputs": text_inputs,
+        "char_ids": char_ids,
         "outputs": outputs,
     }
     return return_dict

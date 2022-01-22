@@ -6,6 +6,7 @@ from typing import List, Tuple, Union
 
 from TTS.tts.datasets.dataset import *
 from TTS.tts.datasets.formatters import *
+from TTS.tts.utils.text import text_to_symbol_ids, text_to_phoneme_ids
 
 """
 Update: i wanted to be able to adjust the train/val/test split ratios and save the splits for reproducibility.
@@ -154,7 +155,7 @@ def preprocess(dataset_config: Dict, ap: AudioProcessor, num_workers: int = 0):
     items = formatter(root_path, meta_file)
     num_items = len(items)
     print(f" Preprocessing {name}...")
-    print(f" | > Found {num_items}) files in {Path(root_path).resolve()}")
+    print(f" | > Found {num_items} files in {Path(root_path).resolve()}")
     ap = ap
 
     # TODO: need to ensure wav filenames are unique.
@@ -162,13 +163,13 @@ def preprocess(dataset_config: Dict, ap: AudioProcessor, num_workers: int = 0):
     if mel_cache_path:
         cache_existed = make_cache_dir(mel_cache_path, num_items)
         if not cache_existed:
-            compute_spectrogram(mel_cache_path, num_workers, mel=True)
+            compute_spectrogram(items, ap, mel_cache_path, num_workers, mel=True)
 
     linear_cache_path = dataset_config["linear_cache_path"]
     if linear_cache_path:
         cache_existed = make_cache_dir(linear_cache_path, num_items)
         if not cache_existed:
-            compute_spectrogram(linear_cache_path, num_workers, mel=False)
+            compute_spectrogram(items, ap, linear_cache_path, num_workers, mel=False)
 
     symbol_ids_cache_path = dataset_config["symbol_ids_cache_path"]
     cleaner_name = dataset_config["cleaner_name"]

@@ -87,6 +87,9 @@ class TrainingArgs(Coqpit):
         default=False,
         metadata={"help": "Use DDP in distributed training. It is to set in `distribute.py`. Do not set manually."},
     )
+    save_on_interrupt: bool = field(default=False,
+                                    metadata={"help": "If True, will save checkpoint if training is stopped."})
+
 
 
 class Trainer:
@@ -1007,25 +1010,44 @@ class Trainer:
             self._fit()
             if self.args.rank == 0:
                 self.dashboard_logger.finish()
+            save = False
+            exit_code = 0
         except KeyboardInterrupt:
             self.callbacks.on_keyboard_interrupt()
-            # if the output folder is empty remove the run.
-            remove_experiment_folder(self.output_path)
             # clear the DDP processes
             if self.num_gpus > 1:
                 dist.destroy_process_group()
             # finish the wandb run and sync data
             if self.args.rank == 0:
                 self.dashboard_logger.finish()
+            save = self.args.save_on_interrupt
             # stop without error signal
-            try:
-                sys.exit(0)
-            except SystemExit:
-                os._exit(0)  # pylint: disable=protected-access
+            exit_code = 0
         except BaseException:  # pylint: disable=broad-except
-            remove_experiment_folder(self.output_path)
             traceback.print_exc()
-            sys.exit(1)
+            # remove_experiment_folder(self.output_path)
+            save = self.args.save_on_interrupt
+            exit_code = 1
+        finally:
+            if save:
+                try:
+                    target_avg_loss = self._pick_target_avg_loss(self.keep_avg_train)
+                    save_checkpoint(
+                        self.config,
+                        self.model,
+                        self.optimizer,
+                        self.scaler if self.use_amp_scaler else None,
+                        self.total_steps_done,
+                        self.epochs_done,
+                        self.output_path,
+                        model_loss=target_avg_loss,
+                    )
+                except:
+                    pass
+            try:
+                sys.exit(exit_code)
+            except SystemExit:
+                os._exit(exit_code)  # pylint: disable=protected-access
 
     def save_best_model(self) -> None:
         """Save the best model. It only saves if the current target loss is smaller then the previous."""

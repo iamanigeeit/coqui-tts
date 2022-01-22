@@ -21,8 +21,8 @@ dataset_config = BaseDatasetConfig(
     ununsed_speakers=[],
     meta_file_val="",
     meta_file_attn_mask="",
-    train_df_file=os.path.join(output_path, 'splits', 'train.csv'),
-    val_df_file=os.path.join(output_path, 'splits', 'val.csv'),
+    train_df_file=os.path.join(data_path, 'splits', 'train.csv'),
+    val_df_file=os.path.join(data_path, 'splits', 'val.csv'),
     split_ratios=(0.8, 0.1, 0.1),
     cleaner_name="english_cleaners",
     symbol_ids_cache_path=os.path.join(data_path, 'symbol_ids'),
@@ -92,10 +92,11 @@ config = Tacotron2Config(  # This is the config that is saved for the future use
 
 # init model
 model = Tacotron2(config)
-#
+continue_path = '/home/perry/PycharmProjects/TTS/recipes/ljspeech/prune/coqui_tts-20220121_2029-0938d9e2'
+
 # # init the trainer and 🚀
 trainer = Trainer(
-    TrainingArgs(),
+    TrainingArgs(continue_path=continue_path, save_on_interrupt=True),
     config,
     output_path,
     model=model,
@@ -104,5 +105,5 @@ trainer = Trainer(
     training_assets={"audio_processor": ap},
 )
 trainer.fit()
-
+# trainer.test_run()
 

@@ -255,13 +255,6 @@ class Tacotron2(BaseTacotron):
         d_vectors = batch["d_vectors"]
 
         # forward pass model
-        outputs = self.forward(
-            char_ids,
-            id_lengths,
-            mel_input,
-            mel_lengths,
-            aux_input={"speaker_ids": speaker_ids, "d_vectors": d_vectors},
-        )
 
         # set the [alignment] lengths wrt reduction factor for guided attention
         if mel_lengths.max() % self.decoder.r != 0:

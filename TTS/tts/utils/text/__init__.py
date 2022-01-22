@@ -179,7 +179,7 @@ def phoneme_ids_to_phones(sequence: List, custom_phonemes: List[str] = None,
 
 
 def text_to_symbol_ids(
-    text: str, cleaner_names: List[str], custom_symbols: List[str] = None,
+    text: str, cleaner_name: str, custom_symbols: List[str] = None,
     character_config: Dict = None, add_blank: bool = False
 ) -> List[int]:
     """Converts a string of text to a sequence of IDs corresponding to the symbols in the text.
@@ -187,7 +187,7 @@ def text_to_symbol_ids(
 
     Args:
       text (str): string to convert to a sequence
-      cleaner_names (List[str]): names of the cleaner functions to run the text through
+      cleaner_name (List[str]): names of the cleaner functions to run the text through
       character_config (Dict): dictionary of character parameters to use a custom character set.
       add_blank (bool): option to add a blank token between each token.
 
@@ -209,9 +209,9 @@ def text_to_symbol_ids(
     while text:
         m = _CURLY_RE.match(text)
         if not m:
-            sequence = _symbols_to_sequence(_clean_text(text, cleaner_names))
+            sequence = _symbols_to_sequence(_clean_text(text, cleaner_name))
             break
-        sequence += _symbols_to_sequence(_clean_text(m.group(1), cleaner_names))
+        sequence += _symbols_to_sequence(_clean_text(m.group(1), cleaner_name))
         sequence += _arpabet_to_sequence(m.group(2))
         text = m.group(3)
 

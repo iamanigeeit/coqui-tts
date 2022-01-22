@@ -73,9 +73,9 @@ class ConsoleLogger:
     def print_eval_start(self):
         print(f"\n{tcolors.BOLD} > EVALUATION {tcolors.ENDC}\n")
 
-    def print_eval_step(self, eval_batch_steps, step, loss_dict, avg_loss_dict):
+    def print_eval_step(self, step, loss_dict, avg_loss_dict):
         indent = "     | > "
-        log_texts = [f"{tcolors.BOLD}   --> STEP: {step}/{eval_batch_steps}{tcolors.ENDC}"]
+        log_texts = [f"{tcolors.BOLD}   --> STEP: {step}{tcolors.ENDC}"]
         for key, value in loss_dict.items():
             # print the avg value if given
             if f"avg_{key}" in avg_loss_dict.keys():
