@@ -1043,7 +1043,7 @@ class Trainer:
                         model_loss=target_avg_loss,
                     )
                 except:
-                    pass
+                    traceback.print_exc()
             try:
                 sys.exit(exit_code)
             except SystemExit:

@@ -41,7 +41,7 @@ def plot_spectrogram(spectrogram, ap=None, fig_size=(16, 10), output_fig=False):
     if ap is not None:
         spectrogram_ = ap.denormalize(spectrogram_)  # pylint: disable=protected-access
     fig = plt.figure(figsize=fig_size)
-    plt.imshow(spectrogram_, aspect="auto", origin="lower")
+    plt.imshow(spectrogram_, aspect="auto", origin="lower", cmap='viridis')
     plt.colorbar()
     plt.tight_layout()
     if not output_fig:

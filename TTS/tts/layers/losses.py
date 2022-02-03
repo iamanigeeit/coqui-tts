@@ -327,7 +327,7 @@ class TacotronLoss(torch.nn.Module):
 
         # decoder outputs linear or mel spectrograms for Tacotron and Tacotron2
         # the target should be set acccordingly
-        postnet_target = linear_input if self.config.model.lower() in ["tacotron"] else mel_input
+        postnet_target = linear_input if self.config.model.lower() == "tacotron" else mel_input
 
         return_dict = {}
         # remove lengths if no masking is applied
@@ -349,7 +349,10 @@ class TacotronLoss(torch.nn.Module):
         return_dict["postnet_loss"] = postnet_loss
 
         stop_loss = (
-            self.criterion_st(stopnet_output, stopnet_target, stop_target_length)
+            self.criterion_st(stopnet_output, stopnet_target,
+                              # length=stop_target_length,
+                              length=None,
+                              )  # TODO: less hacky way
             if self.config.stopnet
             else torch.zeros(1)
         )

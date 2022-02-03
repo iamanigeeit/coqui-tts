@@ -70,7 +70,7 @@ class ParallelWaveganGenerator(torch.nn.Module):
                 dropout=dropout,
                 bias=bias,
             )
-            self.conv_layers += [conv]
+            self.conv_layers.append(conv)
 
         # define output layers
         self.last_conv_layers = torch.nn.ModuleList(

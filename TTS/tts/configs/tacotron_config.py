@@ -152,8 +152,8 @@ class TacotronConfig(BaseTTSConfig):
     prenet_dropout_at_inference: bool = False
     stopnet: bool = True
     separate_stopnet: bool = True
-    stopnet_pos_weight: float = 10.0
-    max_decoder_steps: int = 500
+    stopnet_pos_weight: float = 0.2
+    max_decoder_steps: int = 1000
     encoder_in_features: int = 256
     decoder_in_features: int = 256
     decoder_output_dim: int = 80

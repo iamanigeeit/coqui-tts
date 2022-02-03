@@ -198,15 +198,15 @@ class Tacotron2(BaseTacotron):
         return outputs
 
     @torch.no_grad()
-    def inference(self, text, aux_input=None):
+    def inference(self, char_ids, aux_input=None):
         """Forward pass for inference with no Teacher-Forcing.
 
         Shapes:
-           text: :math:`[B, T_in]`
+           char_ids: :math:`[B, T_in]`
            id_lengths: :math:`[B]`
         """
         aux_input = self._format_aux_input(aux_input)
-        embedded_inputs = self.embedding(text).transpose(1, 2)
+        embedded_inputs = self.embedding(char_ids).transpose(1, 2)
         encoder_outputs = self.encoder.inference(embedded_inputs)
 
         if self.gst and self.use_gst:

@@ -233,7 +233,7 @@ class Synthesizer(object):
                 ap=self.ap,
                 speaker_id=speaker_id,
                 style_wav=style_wav,
-                enable_eos_bos_chars=self.tts_config.enable_eos_bos_chars,
+                enable_eos_bos=self.tts_config.enable_eos_bos,
                 use_griffin_lim=use_gl,
                 d_vector=speaker_embedding,
             )
@@ -244,7 +244,7 @@ class Synthesizer(object):
                 mel_postnet_spec = self.ap.denormalize(mel_postnet_spec.T).T
                 device_type = "cuda" if self.use_cuda else "cpu"
                 # renormalize spectrogram based on vocoder config
-                vocoder_input = self.vocoder_ap.normalize(mel_postnet_spec.T)
+                vocoder_input = self.vocoder_ap.normalize(mel_postnet_spec).T
                 # compute scale factor for possible sample rate mismatch
                 scale_factor = [
                     1,

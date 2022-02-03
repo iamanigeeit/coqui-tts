@@ -23,7 +23,7 @@ dataset_config = BaseDatasetConfig(
     meta_file_attn_mask="",
     train_df_file=os.path.join(data_path, 'splits', 'train.csv'),
     val_df_file=os.path.join(data_path, 'splits', 'val.csv'),
-    split_ratios=(0.8, 0.1, 0.1),
+    split_ratios=[0.8, 0.1, 0.1],
     cleaner_name="english_cleaners",
     symbol_ids_cache_path=os.path.join(data_path, 'symbol_ids'),
     phoneme_ids_cache_path=os.path.join(data_path, 'phoneme_ids'),
@@ -71,7 +71,7 @@ train_items, eval_items = load_train_eval_items(dataset_config, all_items)
 config = Tacotron2Config(  # This is the config that is saved for the future use
     audio=audio_config,
     batch_size=32,
-    eval_batch_size=16,
+    eval_batch_size=32,
     num_loader_workers=4,
     num_eval_loader_workers=4,
     run_eval=True,
@@ -80,23 +80,30 @@ config = Tacotron2Config(  # This is the config that is saved for the future use
     r=1,
     attention_type="dynamic_convolution",
     double_decoder_consistency=True,
-    epochs=1000,
+    # epochs=1,
+    epochs=306,  # 100k steps on LJSpeech data
     use_phonemes=True,
     print_step=25,
     print_eval=True,
-    mixed_precision=False,
+    mixed_precision=False,  # Mixed precision doesn't seem to be faster even with apex
     output_path=output_path,
     dataset_configs=[dataset_config],
+    enable_eos_bos=True,  #
     # character_config={},
+    stopnet_pos_weight=0.2,
+    max_decoder_steps=1000,
 )
 
 # init model
 model = Tacotron2(config)
-continue_path = '/home/perry/PycharmProjects/TTS/recipes/ljspeech/prune/coqui_tts-20220121_2029-0938d9e2'
+continue_path = ''
+# continue_path = '/home/perry/PycharmProjects/TTS/recipes/ljspeech/prune/coqui_tts-20220127_2052-febb93cf'
+save_on_interrupt = True
+# save_on_interrupt = False
 
 # # init the trainer and 🚀
 trainer = Trainer(
-    TrainingArgs(continue_path=continue_path, save_on_interrupt=True),
+    TrainingArgs(continue_path=continue_path, save_on_interrupt=save_on_interrupt),
     config,
     output_path,
     model=model,

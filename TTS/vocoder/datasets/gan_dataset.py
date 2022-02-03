@@ -130,8 +130,12 @@ class GANDataset(Dataset):
                 audio, mel = self._pad_short_samples(audio, mel)
 
         # correct the audio length wrt padding applied in stft
-        audio = np.pad(audio, (0, self.hop_len), mode="edge")
-        audio = audio[: mel.shape[-1] * self.hop_len]
+        mel_wav_len = mel.shape[-1] * self.hop_len
+        audio_len = audio.shape[-1]
+        if audio_len < mel_wav_len:
+            audio = np.pad(audio, (0, mel_wav_len-audio_len), mode='edge')
+        else:
+            audio = audio[: mel_wav_len]
         assert (
             mel.shape[-1] * self.hop_len == audio.shape[-1]
         ), f" [!] {mel.shape[-1] * self.hop_len} vs {audio.shape[-1]}"

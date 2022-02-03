@@ -88,7 +88,7 @@ class ParallelWaveganConfig(BaseGANVocoderConfig):
     )
 
     # Training - overrides
-    batch_size: int = 6
+    batch_size: int = 32
     seq_len: int = 25600
     pad_short: int = 2000
     use_noise_augment: bool = False
@@ -128,3 +128,4 @@ class ParallelWaveganConfig(BaseGANVocoderConfig):
     lr_scheduler_gen_params: dict = field(default_factory=lambda: {"gamma": 0.999, "last_epoch": -1})
     lr_scheduler_disc: str = "ExponentialLR"  # one of the schedulers from https:#pytorch.org/docs/stable/optim.html
     lr_scheduler_disc_params: dict = field(default_factory=lambda: {"gamma": 0.999, "last_epoch": -1})
+

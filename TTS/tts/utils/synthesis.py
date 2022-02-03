@@ -26,8 +26,7 @@ def text_to_seq(text, use_phonemes, dataset_config, enable_eos_bos, custom_symbo
         global phonemizer
         if phonemizer is None:
             phonemizer = gruut.get_phonemizer(phoneme_language, **phonemizer_args)
-        seq = np.asarray(
-            text_to_phoneme_ids(
+        seq = text_to_phoneme_ids(
                 text,
                 cleaner_name=cleaner_name,
                 phonemizer=phonemizer,
@@ -35,8 +34,6 @@ def text_to_seq(text, use_phonemes, dataset_config, enable_eos_bos, custom_symbo
                 custom_symbols=custom_symbols,
                 character_config=character_config,
                 add_blank=add_blank,
-            ),
-            dtype=np.int32,
         )
     else:
         seq = text_to_symbol_ids(
@@ -213,7 +210,7 @@ def synthesis(
     ap,
     speaker_id=None,
     style_wav=None,
-    enable_eos_bos=False,  # pylint: disable=unused-argument
+    enable_eos_bos=True,  # pylint: disable=unused-argument
     use_griffin_lim=False,
     do_trim_silence=False,
     d_vector=None,

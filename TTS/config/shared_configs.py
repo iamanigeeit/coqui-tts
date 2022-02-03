@@ -1,4 +1,4 @@
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import List, Tuple, Dict
 
 from coqpit import Coqpit, check_argument
@@ -220,7 +220,8 @@ class BaseDatasetConfig(Coqpit):
     meta_file_attn_mask: str = ""
     train_df_file: str = ""
     val_df_file: str = ""
-    split_ratios: Tuple[float, float, float] = (0.8, 0.1, 0.1)
+    # Unfortunately tuples can't be encoded in json
+    split_ratios: List[float] = field(default_factory=lambda: [0.8, 0.1, 0.1])
     cleaner_name: str = ""
     symbol_ids_cache_path: str = ""
     phoneme_ids_cache_path: str = ""

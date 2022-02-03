@@ -7,7 +7,7 @@ from coqpit import Coqpit
 from tqdm import tqdm
 
 from TTS.utils.audio import AudioProcessor
-
+from TTS.utils.generic_utils import get_npy_path
 
 def preprocess_wav_files(out_path: str, config: Coqpit, ap: AudioProcessor):
     """Process wav and compute mel and quantized wave signal.
@@ -67,3 +67,19 @@ def load_wav_feat_data(data_path, feat_path, eval_split_size):
     np.random.seed(0)
     np.random.shuffle(items)
     return items[:eval_split_size], items[eval_split_size:]
+
+
+def load_data_from_splits(csvs, mel_cache_path):
+    import pandas as pd
+    if isinstance(csvs, str):
+        wav_paths = pd.read_csv(csvs).ground_truth_path.values.tolist()
+        feats = [get_npy_path(mel_cache_path, wav_path) for wav_path in wav_paths]
+        return list(zip(wav_paths, feats))
+    else:
+        items_list = []
+        for csv in csvs:
+            wav_paths = pd.read_csv(csv).ground_truth_path.values.tolist()
+            feats = [get_npy_path(mel_cache_path, wav_path) for wav_path in wav_paths]
+            items = list(zip(wav_paths, feats))
+            items_list.append(items)
+        return items_list

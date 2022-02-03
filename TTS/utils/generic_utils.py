@@ -146,6 +146,10 @@ def format_aux_input(def_args: Dict, kwargs: Dict) -> Dict:
     return kwargs
 
 
+def get_npy_path(cache_path, wav_path):
+    return os.path.join(cache_path, Path(wav_path).stem + ".npy")
+
+
 class KeepAverage:
     def __init__(self):
         self.avg_values = {}

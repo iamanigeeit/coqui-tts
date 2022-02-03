@@ -320,9 +320,9 @@ class Decoder(nn.Module):
         while len(outputs) < memories.size(0) - 1:
             memory = memories[len(outputs)]
             decoder_output, attention_weights, stop_token = self.decode(memory)
-            outputs += [decoder_output.squeeze(1)]
-            stop_tokens += [stop_token.squeeze(1)]
-            alignments += [attention_weights]
+            outputs.append(decoder_output.squeeze(1))
+            stop_tokens.append(stop_token.squeeze(1))
+            alignments.append(attention_weights)
 
         outputs, stop_tokens, alignments = self._parse_outputs(outputs, stop_tokens, alignments)
         return outputs, alignments, stop_tokens
@@ -346,22 +346,20 @@ class Decoder(nn.Module):
         self.attention.init_states(inputs)
 
         outputs, stop_tokens, alignments, t = [], [], [], 0
-        while True:
+        while t < self.max_decoder_steps:
             memory = self.prenet(memory)
             decoder_output, alignment, stop_token = self.decode(memory)
             stop_token = torch.sigmoid(stop_token.data)
-            outputs += [decoder_output.squeeze(1)]
-            stop_tokens += [stop_token]
-            alignments += [alignment]
+            outputs.append(decoder_output.squeeze(1))
+            stop_tokens.append(stop_token)
+            alignments.append(alignment)
 
-            if stop_token > self.stop_threshold and t > inputs.shape[0] // 2:
+            if torch.all(stop_token > self.stop_threshold) and t > inputs.shape[0] // 2:
                 break
-            if len(outputs) == self.max_decoder_steps:
-                print(f"   > Decoder stopped with `max_decoder_steps` {self.max_decoder_steps}")
-                break
-
             memory = self._update_memory(decoder_output)
             t += 1
+        else:
+            print(f"   > Decoder stopped with `max_decoder_steps` {self.max_decoder_steps}")
 
         outputs, stop_tokens, alignments = self._parse_outputs(outputs, stop_tokens, alignments)
 

@@ -128,6 +128,7 @@ def load_train_eval_items(
     return train_items_all, val_items_all
 
 
+
 def load_attention_mask_meta_data(metafile_path: str) -> List[Tuple]:
     """Load meta data file created by compute_attention_masks.py"""
     with open(metafile_path, "r", encoding="utf-8") as f:

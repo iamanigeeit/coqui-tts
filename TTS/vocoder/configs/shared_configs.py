@@ -45,6 +45,8 @@ class BaseVocoderConfig(BaseTrainingConfig):
     # dataset
     data_path: str = ""  # root data path. It finds all wav files recursively from there.
     feature_path: str = None  # if you use precomputed features
+    train_df_file: str = ""  # if loading from train.csv
+    val_df_file: str = ""  # if loading from val.csv
     seq_len: int = 1000  # signal length used in training.
     pad_short: int = 0  # additional padding for short wavs
     conv_pad: int = 0  # additional padding against convolutions applied to spectrograms
@@ -54,6 +56,7 @@ class BaseVocoderConfig(BaseTrainingConfig):
     wd: float = 0.0  # Weight decay weight.
     optimizer: str = "AdamW"
     optimizer_params: dict = field(default_factory=lambda: {"betas": [0.8, 0.99], "weight_decay": 0.0})
+
 
 
 @dataclass
@@ -173,6 +176,7 @@ class BaseGANVocoderConfig(BaseVocoderConfig):
     lr_scheduler_gen_params: dict = field(default_factory=lambda: {"gamma": 0.999, "last_epoch": -1})
     lr_scheduler_disc: str = "ExponentialLR"  # one of the schedulers from https:#pytorch.org/docs/stable/optim.html
     lr_scheduler_disc_params: dict = field(default_factory=lambda: {"gamma": 0.999, "last_epoch": -1})
+    scheduler_after_epoch = True
 
     use_pqmf: bool = False  # enable/disable using pqmf for multi-band training. (Multi-band MelGAN)
     steps_to_start_discriminator = 0  # start training the discriminator after this number of steps.

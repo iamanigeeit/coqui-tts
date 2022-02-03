@@ -11,7 +11,7 @@ from tqdm import tqdm
 from torch.utils.data import Dataset
 
 from TTS.tts.utils.data import prepare_data, prepare_stop_target, prepare_tensor
-from TTS.tts.utils.text import pad_with_eos_bos
+from TTS.utils.generic_utils import get_npy_path
 from TTS.utils.audio import AudioProcessor
 
 
@@ -36,7 +36,7 @@ class TTSDataset(Dataset):
         batch_group_size: int = 0,
         min_seq_len: int = 0,
         max_seq_len: int = 2147483647,  # max int32
-        enable_eos_bos: bool = False,
+        enable_eos_bos: bool = True,
         use_noise_augment: bool = False,
         speaker_id_mapping: Dict = None,
         d_vector_mapping: Dict = None,
@@ -176,11 +176,11 @@ class TTSDataset(Dataset):
             attn = None
 
         char_ids = None
-        char_length = None
+        id_length = None
         if self.char_ids_all:
             char_ids = self.char_ids_all[idx]
-            char_length = self.id_lengths[idx]
-            assert char_length > 0, f" [!] Input sequence is empty for {wav_path}"
+            id_length = self.id_lengths[idx]
+            assert id_length > 0, f" [!] Input sequence is empty for {wav_path}"
 
             if len(char_ids) > self.max_seq_len:
                 # return a different sample if the phonemized
@@ -214,7 +214,7 @@ class TTSDataset(Dataset):
         sample = {
             "text": text,
             "char_ids": char_ids,
-            "char_length": char_length,
+            "id_length": id_length,
             "mel": mel,
             "linear": linear,
             "wav": wav,
@@ -294,16 +294,17 @@ class TTSDataset(Dataset):
         return self.load_data(idx)
 
     @staticmethod
-    def _sort_batch(batch, id_lengths):
+    def _sort_batch(batch):
         """Sort the batch by the input text length for RNN efficiency.
 
         Args:
             batch (Dict): Batch returned by `__getitem__`.
             id_lengths (List[int]): Lengths of the input character sequences.
         """
-        id_lengths, ids_sorted_decreasing = torch.sort(torch.IntTensor(id_lengths), dim=0, descending=True)
-        batch = [batch[idx] for idx in ids_sorted_decreasing]
-        return batch, id_lengths, ids_sorted_decreasing
+        id_lengths = [sample["id_length"] for sample in batch]
+        sorted_idx = np.argsort(id_lengths)[::-1]  # descending
+        batch = [batch[idx] for idx in sorted_idx]
+        return batch
 
     def collate_fn(self, batch):
         r"""
@@ -317,17 +318,24 @@ class TTSDataset(Dataset):
         # Puts each data field into a tensor with outer dimension batch size
         if isinstance(batch[0], collections.abc.Mapping):
 
-            id_lengths = [len(sample["char_ids"]) for sample in batch]
+            # sort items by input length for RNN efficiency
+            batch = self._sort_batch(batch)
 
-            # sort items with text input length for RNN efficiency
-            batch, id_lengths, ids_sorted_decreasing = self._sort_batch(batch, id_lengths)
-
-            # convert list of dicts to dict of lists
+            # convert List[Dict] to Dict[List]
             batch = {k: [dic[k] for dic in batch] for k in batch[0]}
+
+            # PAD sequences with longest instance in the batch
+            char_ids = batch["char_ids"]
+            id_lengths = batch["id_length"]
+            if self.enable_eos_bos:
+                char_ids = [np.insert(sample_char_ids, [0, len(sample_char_ids)], [self.bos_id, self.eos_id])
+                            for sample_char_ids in char_ids]
+                id_lengths = [2 + id_length for id_length in id_lengths]
+            char_ids = prepare_data(char_ids).astype(np.int32)
 
             # get pre-computed d-vectors
             if self.d_vector_mapping is not None:
-                wav_files = [batch["wav_path"][idx] for idx in ids_sorted_decreasing]
+                wav_files = batch["wav_path"]
                 d_vectors = [self.d_vector_mapping[w]["embedding"] for w in wav_files]
             else:
                 d_vectors = None
@@ -356,12 +364,6 @@ class TTSDataset(Dataset):
 
             # PAD stop targets
             stop_targets = prepare_stop_target(stop_targets, self.outputs_per_step)
-
-            # PAD sequences with longest instance in the batch
-            char_ids = batch["char_ids"]
-            if self.enable_eos_bos:
-                char_ids = [[self.bos_id] + sample_char_ids + [self.eos_id] for sample_char_ids in char_ids]
-            char_ids = prepare_data(char_ids).astype(np.int32)
 
             # PAD features with longest instance
             mel = prepare_tensor(mel, self.outputs_per_step)
@@ -554,7 +556,3 @@ class PitchExtractor:
         stats = np.load(stats_path, allow_pickle=True).item()
         self.mean = stats["mean"].astype(np.float32)
         self.std = stats["std"].astype(np.float32)
-
-
-def get_npy_path(cache_path, wav_path):
-    return os.path.join(cache_path, Path(wav_path).stem + ".npy")

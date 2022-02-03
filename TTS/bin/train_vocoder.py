@@ -58,8 +58,8 @@ def main():
         config,
         config.output_path,
         model=model,
-        train_samples=train_samples,
-        eval_samples=eval_samples,
+        train_items=train_samples,
+        eval_items=eval_samples,
         training_assets={"audio_processor": ap},
         parse_command_line_args=False,
     )
