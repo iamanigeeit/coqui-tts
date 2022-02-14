@@ -49,7 +49,9 @@ class TacotronConfig(BaseTTSConfig):
             enable /disable the Stopnet that predicts the end of the decoder sequence. Defaults to True.
         stopnet_pos_weight (float):
             Weight that is applied to over-weight positive instances in the Stopnet loss. Use larger values with
-            datasets with longer sentences. Defaults to 10.
+            datasets with longer sentences. Defaults to 0.2.
+        mask_stop_loss (bool):
+            Whether to mask the stopnet loss. Defaults to False.
         max_decoder_steps (int):
             Max number of steps allowed for the decoder. Defaults to 50.
         encoder_in_features (int):
@@ -121,7 +123,6 @@ class TacotronConfig(BaseTTSConfig):
             Weight for the postnet differential loss of the Tacotron model. If set less than or equal to zero, it disables the
             corresponding loss function. Defaults to 0.25
         decoder_diff_spec_alpha (float):
-
             Weight for the decoder differential loss of the Tacotron model. If set less than or equal to zero, it disables the
             corresponding loss function. Defaults to 0.25
         decoder_ssim_alpha (float):
@@ -133,6 +134,8 @@ class TacotronConfig(BaseTTSConfig):
         ga_alpha (float):
             Weight for the guided attention loss. If set less than or equal to zero, it disables the corresponding loss
             function. Defaults to 5.
+        stopnet_alpha (float):
+            Weight for the guided attention loss. Defaults to 100.0
     """
 
     model: str = "tacotron"
