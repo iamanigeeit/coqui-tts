@@ -94,23 +94,23 @@ config = Tacotron2Config(  # This is the config that is saved for the future use
     max_decoder_steps=1000,
 )
 
-# init model
-model = Tacotron2(config)
-continue_path = ''
-# continue_path = '/home/perry/PycharmProjects/TTS/recipes/ljspeech/prune/coqui_tts-20220127_2052-febb93cf'
-save_on_interrupt = True
-# save_on_interrupt = False
+if __name__ == '__main__':
+    # init model
+    model = Tacotron2(config)
+    continue_path = ''
+    # continue_path = '/home/perry/PycharmProjects/TTS/recipes/ljspeech/prune/coqui_tts-20220127_2052-febb93cf'
+    save_on_interrupt = True
+    # save_on_interrupt = False
 
-# # init the trainer and 🚀
-trainer = Trainer(
-    TrainingArgs(continue_path=continue_path, save_on_interrupt=save_on_interrupt),
-    config,
-    output_path,
-    model=model,
-    train_items=train_items,
-    eval_items=eval_items,
-    training_assets={"audio_processor": ap},
-)
-trainer.fit()
-# trainer.test_run()
+    # # init the trainer and 🚀
+    trainer = Trainer(
+        TrainingArgs(continue_path=continue_path, save_on_interrupt=save_on_interrupt),
+        config,
+        model=model,
+        train_items=train_items,
+        eval_items=eval_items,
+        training_assets={"audio_processor": ap},
+    )
+    trainer.fit()
+    # trainer.test_run()
 

@@ -164,3 +164,10 @@ internal/*
 *_pitch.npy
 *_phoneme.npy
 wandb
+/recipes/ljspeech/prune/google_api_key.json
+/recipes/ljspeech/prune/tacotron2_mask/
+/recipes/ljspeech/prune/tacotron2_nomask/
+/recipes/ljspeech/prune/qns.txt
+/recipes/ljspeech/prune/test_results.ipynb
+/recipes/ljspeech/prune/config.json
+/recipes/ljspeech/prune_vocoder/*/

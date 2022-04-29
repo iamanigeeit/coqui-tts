@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 import sys
+from functools import reduce
 from pathlib import Path
 from typing import Dict
 
@@ -148,6 +149,20 @@ def format_aux_input(def_args: Dict, kwargs: Dict) -> Dict:
 
 def get_npy_path(cache_path, wav_path):
     return os.path.join(cache_path, Path(wav_path).stem + ".npy")
+
+
+def get_module_by_name(module, access_string):
+    names = access_string.split(sep='.')
+    return reduce(getattr, names, module)
+
+
+def get_param_by_name(model, full_name):
+    m, n = full_name.rsplit('.', 1)
+    module = get_module_by_name(model, m)
+    try:
+        return getattr(module, n)
+    except AttributeError:
+        return None
 
 
 class KeepAverage:

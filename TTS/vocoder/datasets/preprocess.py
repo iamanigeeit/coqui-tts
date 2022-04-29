@@ -1,6 +1,8 @@
 import glob
 import os
 from pathlib import Path
+from multiprocessing import Pool
+from typing import List
 
 import numpy as np
 from coqpit import Coqpit
@@ -8,6 +10,7 @@ from tqdm import tqdm
 
 from TTS.utils.audio import AudioProcessor
 from TTS.utils.generic_utils import get_npy_path
+from TTS.tts.datasets import make_cache_dir
 
 def preprocess_wav_files(out_path: str, config: Coqpit, ap: AudioProcessor):
     """Process wav and compute mel and quantized wave signal.
@@ -69,17 +72,47 @@ def load_wav_feat_data(data_path, feat_path, eval_split_size):
     return items[:eval_split_size], items[eval_split_size:]
 
 
-def load_data_from_splits(csvs, mel_cache_path):
+def compute_normalized_mel(data_dir: str, mel_norm_cache_path: str, vocoder_config: Coqpit, ap: AudioProcessor):
+    wav_paths = find_wav_files(data_dir)
+    cache_existed = make_cache_dir(mel_norm_cache_path, len(wav_paths))
+    if not cache_existed:
+        assert vocoder_config.audio.signal_norm
+        print(f" | > Computing normalized mel ...")
+        num_workers = vocoder_config.num_loader_workers
+        if num_workers == 0:
+            for wav_path in tqdm(wav_paths):
+                _spectrogram_worker([wav_path, ap.load_wav, ap.melspectrogram, mel_norm_cache_path])
+        else:
+            with Pool(num_workers) as p:
+                list(tqdm(
+                    p.imap(
+                        _spectrogram_worker,
+                        [[wav_path, ap.load_wav, ap.melspectrogram, mel_norm_cache_path] for wav_path in wav_paths]),
+                    total=len(wav_paths),
+                    )
+                )
+
+
+def _spectrogram_worker(args):
+    wav_path, load_wav, spec_fn, cache_path = args
+    spectrogram_path = get_npy_path(cache_path, wav_path)
+    if not os.path.exists(spectrogram_path):
+        audio = load_wav(wav_path)
+        spectrogram = spec_fn(audio).astype("float32")
+        np.save(spectrogram_path, spectrogram)
+
+
+def load_data_from_splits(csvs, mel_norm_cache_path):
     import pandas as pd
     if isinstance(csvs, str):
         wav_paths = pd.read_csv(csvs).ground_truth_path.values.tolist()
-        feats = [get_npy_path(mel_cache_path, wav_path) for wav_path in wav_paths]
+        feats = [get_npy_path(mel_norm_cache_path, wav_path) for wav_path in wav_paths]
         return list(zip(wav_paths, feats))
     else:
         items_list = []
         for csv in csvs:
             wav_paths = pd.read_csv(csv).ground_truth_path.values.tolist()
-            feats = [get_npy_path(mel_cache_path, wav_path) for wav_path in wav_paths]
+            feats = [get_npy_path(mel_norm_cache_path, wav_path) for wav_path in wav_paths]
             items = list(zip(wav_paths, feats))
             items_list.append(items)
         return items_list

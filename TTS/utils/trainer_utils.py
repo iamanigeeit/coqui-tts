@@ -8,7 +8,9 @@ import fsspec
 import torch
 
 from TTS.utils.io import load_fsspec
-from TTS.utils.training import NoamLR
+from TTS.utils.training import NoamLR, FixedLR
+from TTS.utils.generic_utils import get_module_by_name, get_param_by_name
+from torch.nn.utils import prune
 
 
 def is_apex_available():
@@ -58,6 +60,8 @@ def get_scheduler(
         return None
     if lr_scheduler.lower() == "noamlr":
         scheduler = NoamLR
+    elif lr_scheduler.lower() == "fixedlr":
+        scheduler = FixedLR
     else:
         scheduler = getattr(torch.optim.lr_scheduler, lr_scheduler)
     return scheduler(optimizer, **lr_scheduler_params)
@@ -148,3 +152,30 @@ def get_last_checkpoint(path: str) -> Tuple[str, str]:
         last_models["checkpoint"] = last_models["best_model"]
 
     return last_models["checkpoint"], last_models["best_model"]
+
+
+def will_prune(param_name, exclude_params):
+    for exclude_param in exclude_params:
+        if exclude_param in param_name:
+            return False
+    return True
+
+
+def global_prune(model, amount, exclude_params=()):
+    param_sizes = {p: tensor.numel() for p, tensor in model.named_parameters() if tensor.requires_grad}
+    print('Total trainable params: {}'.format(sum(param_sizes.values())))
+    prune_params = [p for p in param_sizes.keys() if will_prune(p, exclude_params)]
+    print('Total params eligible to prune: {}'.format(sum(param_sizes[p] for p in prune_params)))
+    prune_params = [p.rsplit('.', 1) for p in prune_params]
+    prune_params = [(get_module_by_name(model, access_string), param) for access_string, param in prune_params]
+    prune.global_unstructured(prune_params, pruning_method=prune.L1Unstructured, amount=amount)
+    for module, name in prune_params:
+        prune.remove(module, name)
+    print(f' > Model pruned by {amount*100}%')
+
+
+def apply_masks(model, masks):
+    for full_name, mask in masks.items():
+        param = get_param_by_name(model, full_name)
+        param.data = param.data * mask
+

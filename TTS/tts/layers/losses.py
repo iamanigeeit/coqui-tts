@@ -308,7 +308,7 @@ class TacotronLoss(torch.nn.Module):
             self.criterion_ssim = SSIMLoss()
         # stopnet loss
         # pylint: disable=not-callable
-        self.criterion_st = BCELossMasked(pos_weight=torch.tensor(self.stopnet_pos_weight)) if c.stopnet else None
+        self.criterion_st = BCELossMasked(pos_weight=torch.tensor(self.stopnet_pos_weight)) # if c.stopnet else None
 
     def forward(
         self,
@@ -353,9 +353,9 @@ class TacotronLoss(torch.nn.Module):
         if self.config.stopnet:
             length = stop_target_length if self.mask_stop_loss else None
             stop_loss = self.criterion_st(stopnet_output, stopnet_target, length)
+            loss += self.stopnet_alpha * stop_loss
         else:
             stop_loss = torch.zeros(1)
-        loss += self.stopnet_alpha * stop_loss
         return_dict["stopnet_loss"] = stop_loss
 
         # backward decoder loss (if enabled)

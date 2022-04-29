@@ -183,7 +183,7 @@ class BaseTTS(BaseModel):
         num_gpus: int,
         rank: int = None,
     ) -> "DataLoader":
-        if is_eval and not config.run_eval:
+        if data_items is None:
             return None
 
         if is_eval:

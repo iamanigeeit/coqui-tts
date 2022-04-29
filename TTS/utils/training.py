@@ -44,6 +44,12 @@ class NoamLR(torch.optim.lr_scheduler._LRScheduler):
         ]
 
 
+# pylint: disable=protected-access
+class FixedLR(torch.optim.lr_scheduler.LambdaLR):
+    def __init__(self, optimizer, multiplier=1.0, last_epoch=-1):
+        super().__init__(optimizer, lr_lambda=lambda epoch: multiplier, last_epoch=last_epoch)
+
+
 def gradual_training_scheduler(global_step, config):
     """Setup the gradual training schedule wrt number
     of active GPUs"""

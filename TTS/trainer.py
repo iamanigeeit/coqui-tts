@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+import pickle
 import importlib
 import multiprocessing
 import os
@@ -29,8 +29,9 @@ from TTS.utils.generic_utils import (
     remove_experiment_folder,
     set_init_dict,
     to_cuda,
+    get_module_by_name,
 )
-from TTS.utils.io import copy_model_files, load_fsspec, save_best_model, save_checkpoint
+from TTS.utils.io import copy_model_files, load_fsspec, save_best_model, save_checkpoint, save_model
 from TTS.utils.logging import ConsoleLogger, TensorboardLogger, WandbLogger, init_dashboard_logger
 from TTS.utils.trainer_utils import (
     get_last_checkpoint,
@@ -38,7 +39,11 @@ from TTS.utils.trainer_utils import (
     get_scheduler,
     is_apex_available,
     setup_torch_training_env,
+    global_prune,
+    apply_masks,
 )
+
+from sparselearning.core import CosineDecay, Masking
 
 multiprocessing.set_start_method("fork")
 
@@ -68,7 +73,7 @@ class TrainingArgs(Coqpit):
     restore_path: str = field(
         default="",
         metadata={
-            "help": "Path to a model checkpoit. Restore the model with the given checkpoint and start a new training."
+            "help": "Path to a model checkpoint. Restore the model with the given checkpoint and start a new training."
         },
     )
     best_path: str = field(
@@ -87,9 +92,53 @@ class TrainingArgs(Coqpit):
         default=False,
         metadata={"help": "Use DDP in distributed training. It is to set in `distribute.py`. Do not set manually."},
     )
-    save_on_interrupt: bool = field(default=False,
-                                    metadata={"help": "If True, will save checkpoint if training is stopped."})
-
+    new_scheduler: bool = field(
+        default=False,
+        metadata={"help": "If True, will use scheduler/optimizer specified in config instead of restoring "
+                          "scheduler/optimizer from checkpoint. Only used when restore_path is given"}
+    )
+    new_optimizer: bool = field(
+        default=False,
+        metadata={"help": "If True, will use scheduler/optimizer specified in config instead of restoring "
+                          "scheduler/optimizer from checkpoint. Only used when restore_path is given"}
+    )
+    save_on_finish: bool = field(
+        default=True,
+        metadata={"help": "If True, will save checkpoint at the end of training."}
+    )
+    save_on_interrupt: bool = field(
+        default=False,
+        metadata={"help": "If True, will save checkpoint if training is stopped."}
+    )
+    exit_on_finish: bool = field(
+        default=True,
+        metadata={"help": "If True, process exits after `trainer.fit()`. "
+                          "Set to False if you want to manipulate the model afterwards."}
+    )
+    use_snip: bool = field(
+        default=False,
+        metadata={"help": "If True, run SNIP to find initial mask before starting."}
+    )
+    sm_sparsity: float = field(
+        default=0.0,
+        metadata={
+            "help": "If nonzero, use sparselearning library and use the given rate as the sparselearning sparsity rate."
+        })
+    exclude_params: tuple = field(
+        default=('stopnet',),
+        metadata={"help": "Param names to exclude when using sparselearning."}
+    )
+    sm_prune_rate: float = field(
+        default=0.5,
+        metadata={"help": "Ratio of weights to redistribute when using sparselearning."}
+    )
+    sm_mode: str = field(default='constant', metadata={"help": "Mode when using sparselearning."})
+    sm_growth_mode: str = field(default='momentum', metadata={"help": "Mode when using sparselearning."})
+    sm_prune_every_k: int = field(
+        default=0,
+        metadata={"help": "How many steps before redistributing weights when using sparselearning. (0 = after epoch)"}
+    )
+    snip_mask_path: str = field(default='', metadata={'help': 'Masks to load from SNIP'})
 
 
 class Trainer:
@@ -97,7 +146,7 @@ class Trainer:
         self,
         args: Union[Coqpit, Namespace],
         config: Coqpit,
-        output_path: str,
+        output_path: str = '',
         c_logger: ConsoleLogger = None,
         dashboard_logger: Union[TensorboardLogger, WandbLogger] = None,
         model: nn.Module = None,
@@ -189,7 +238,6 @@ class Trainer:
         if parse_command_line_args:
             # parse command-line arguments for TrainerArgs()
             args, coqpit_overrides = self.parse_argv(args)
-
             # get ready for training and parse command-line arguments for the model config
             config = self.init_training(args, coqpit_overrides, config)
 
@@ -197,11 +245,13 @@ class Trainer:
         if args.continue_path:
             # use the same path as the continuing run
             output_path = args.continue_path
+        elif output_path:
+            os.makedirs(output_path, exist_ok=True)
         else:
             # override the output path if it is provided
-            output_path = config.output_path if output_path is None else output_path
+            output_path = config.output_path
             # create a new output folder name
-            output_path = get_experiment_folder_path(config.output_path, config.run_name)
+            output_path = get_experiment_folder_path(output_path, config.run_name)
             os.makedirs(output_path, exist_ok=True)
 
         # copy training assets to the output folder
@@ -283,8 +333,40 @@ class Trainer:
             else:
                 self.criterion.cuda()
 
-        # setup optimizer
+        # setup optimizer and scheduler
+        self.mask = None
         self.optimizer = self.get_optimizer(self.model, self.config)
+        self.scheduler = self.get_scheduler(self.model, self.config, self.optimizer)
+
+        sparsity = self.args.sm_sparsity
+        if sparsity:
+            prune_rate = self.args.sm_prune_rate
+            sm_mode = self.args.sm_mode
+            exclude_params = self.args.exclude_params
+            growth_mode = self.args.sm_growth_mode
+            prune_every_k = self.args.sm_prune_every_k
+            self.decay = CosineDecay(prune_rate=prune_rate,
+                                     T_max=len(self.train_items) * self.config.epochs)
+            self.mask = Masking(self.optimizer, prune_rate_decay=self.decay,
+                                prune_rate=prune_rate, growth_mode=growth_mode,
+                                prune_every_k_steps=prune_every_k, verbose=True)
+            if sm_mode == 'resume':
+                global_prune(self.model, sparsity, exclude_params=exclude_params)
+            self.mask.add_module(self.model,
+                                 density=1.0-sparsity,
+                                 remove_param_names=exclude_params,
+                                 sparse_init=sm_mode)
+
+        else:
+            self.scheduler = self.get_scheduler(self.model, self.config, self.optimizer)
+            self.optimizer = self.get_optimizer(self.model, self.config)
+
+        self.snip = False
+        snip_mask_path = self.args.snip_mask_path
+        if snip_mask_path:
+            self.snip = True
+            sparsity, self.snip_masks = torch.load(snip_mask_path)
+            print(f'Loaded masks from {snip_mask_path} at sparsity {sparsity}')
 
         # CALLBACK
         self.callbacks = TrainerCallback(self)
@@ -303,25 +385,21 @@ class Trainer:
             self.scaler = None
 
         if self.args.restore_path:
-            self.model, self.optimizer, self.scaler, self.restore_step = self.restore_model(
-                self.config, args.restore_path, self.model, self.optimizer, self.scaler
-            )
-
-        # setup scheduler
-        self.scheduler = self.get_scheduler(self.model, self.config, self.optimizer)
-
-        if self.scheduler is not None:
-            if self.args.continue_path:
-                if isinstance(self.scheduler, list):
-                    for scheduler in self.scheduler:
-                        if scheduler is not None:
-                            scheduler.last_epoch = self.restore_step
-                else:
-                    self.scheduler.last_epoch = self.restore_step
+            self.restore_step = self.restore_model(self.args.restore_path)
+        # if self.scheduler is not None:
+        #     if self.args.continue_path:
+        #         if isinstance(self.scheduler, list):
+        #             for scheduler in self.scheduler:
+        #                 if scheduler is not None:
+        #                     scheduler.last_epoch = self.restore_step
+        #         else:
+        #             self.scheduler.last_epoch = self.restore_step
 
         # DISTRIBUTED
         if self.num_gpus > 1:
             self.model = DDP_th(self.model, device_ids=[args.rank], output_device=args.rank)
+
+
 
         # count model size
         num_params = count_parameters(self.model)
@@ -403,15 +481,8 @@ class Trainer:
             return train_items, eval_items
         return None, None
 
-    def restore_model(
-        self,
-        config: Coqpit,
-        restore_path: str,
-        model: nn.Module,
-        optimizer: torch.optim.Optimizer,
-        scaler: torch.cuda.amp.GradScaler = None,
-    ) -> Tuple[nn.Module, torch.optim.Optimizer, torch.cuda.amp.GradScaler, int]:
-        """Restore training from an old run. It restores model, optimizer, AMP scaler and training stats.
+    def restore_model(self, restore_path: str) -> int:
+        """Restore training from an old run. It restores (in-place) model, optimizer, AMP scaler and training stats.
 
         Args:
             config (Coqpit): Model config.
@@ -436,32 +507,42 @@ class Trainer:
         checkpoint = load_fsspec(restore_path, map_location="cpu")
         try:
             print(" > Restoring Model...")
-            model.load_state_dict(checkpoint["model"])
-            print(" > Restoring Optimizer...")
-            optimizer = _restore_list_objs(checkpoint["optimizer"], optimizer)
+            self.model.load_state_dict(checkpoint["model"])
+            if self.args.new_scheduler:
+                print(" > Using Scheduler from config...")
+            else:
+                print(" > Restoring Scheduler...")
+                _restore_list_objs(checkpoint["scheduler"], self.scheduler)
+            if self.args.new_optimizer:
+                print(" > Using Optimizer from config...")
+            else:
+                print(" > Restoring Optimizer...")
+                _restore_list_objs(checkpoint["optimizer"], self.optimizer)
+
             if "scaler" in checkpoint and self.use_amp_scaler and checkpoint["scaler"]:
                 print(" > Restoring Scaler...")
-                scaler = _restore_list_objs(checkpoint["scaler"], scaler)
+                _restore_list_objs(checkpoint["scaler"], self.scaler)
         except (KeyError, RuntimeError):
             print(" > Partial model initialization...")
-            model_dict = model.state_dict()
-            model_dict = set_init_dict(model_dict, checkpoint["model"], config)
-            model.load_state_dict(model_dict)
+            model_dict = self.model.state_dict()
+            model_dict = set_init_dict(model_dict, checkpoint["model"], self.config)
+            self.model.load_state_dict(model_dict)
             del model_dict
-
-        if isinstance(self.optimizer, list):
-            for idx, optim in enumerate(optimizer):
-                for group in optim.param_groups:
-                    group["lr"] = self.get_lr(model, config)[idx]
-        else:
-            for group in optimizer.param_groups:
-                group["lr"] = self.get_lr(model, config)
+        finally:
+            self.scheduler.optimizer = self.optimizer
+        # if isinstance(self.optimizer, list):
+        #     for idx, optim in enumerate(optimizer):
+        #         for group in optim.param_groups:
+        #             group["lr"] = self.get_lr(model, config)[idx]
+        # else:
+        #     for group in optimizer.param_groups:
+        #         group["lr"] = self.get_lr(model, config)
         print(
             " > Model restored from step %d" % checkpoint["step"],
         )
         restore_step = checkpoint["step"]
         torch.cuda.empty_cache()
-        return model, optimizer, scaler, restore_step
+        return restore_step
 
     #########################
     # DATA LOADING FUNCTIONS
@@ -572,7 +653,7 @@ class Trainer:
         scheduler: Union[torch.optim.lr_scheduler._LRScheduler, List],  # pylint: disable=protected-access
         config: Coqpit,
         optimizer_idx: int = None,
-    ) -> Tuple[Dict, Dict, int]:
+    ) -> Tuple[Dict, Dict, float]:
         """Perform a forward - backward pass and run the optimizer.
 
         Args:
@@ -589,12 +670,15 @@ class Trainer:
             RuntimeError: When the loss is NaN.
 
         Returns:
-            Tuple[Dict, Dict, int, torch.Tensor]: model outputs, losses, step time and gradient norm.
+            Tuple[Dict, Dict, float]: model outputs, losses, step time.
         """
 
         step_start_time = time.time()
         # zero-out optimizer
         optimizer.zero_grad()
+
+        if self.snip:
+            apply_masks(self.model, self.snip_masks)
 
         # forward pass and loss computation
         with torch.cuda.amp.autocast(enabled=config.mixed_precision):
@@ -647,7 +731,11 @@ class Trainer:
             loss_dict["loss"].backward()
             if grad_clip > 0:
                 grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-            optimizer.step()
+
+            if self.mask is None:
+                optimizer.step()
+            else:
+                self.mask.step()
 
         # pytorch skips the step when the norm is 0. So ignore the norm value when it is NaN
         if isinstance(grad_norm, torch.Tensor) and (torch.isnan(grad_norm) or torch.isinf(grad_norm)):
@@ -766,10 +854,13 @@ class Trainer:
                 if self.config.checkpoint:
                     # checkpoint the model
                     target_avg_loss = self._pick_target_avg_loss(self.keep_avg_train)
+                    if self.snip:
+                        apply_masks(self.model, self.snip_masks)
                     save_checkpoint(
                         self.config,
                         self.model,
                         self.optimizer,
+                        self.scheduler,
                         self.scaler if self.use_amp_scaler else None,
                         self.total_steps_done,
                         self.epochs_done,
@@ -838,6 +929,7 @@ class Trainer:
                         scheduler.step()
             else:
                 self.scheduler.step()
+
 
     #######################
     # EVAL FUNCTIONS
@@ -948,7 +1040,7 @@ class Trainer:
                     verbose=True,
                 )
 
-            if hasattr(self.eval_loader.dataset, "load_test_samples"):
+            if self.eval_loader is not None and hasattr(self.eval_loader.dataset, "load_test_samples"):
                 samples = self.eval_loader.dataset.load_test_samples(1)
                 if self.num_gpus > 1:
                     figures, audios = self.model.module.test_run(self.training_assets, samples, None)
@@ -966,7 +1058,8 @@ class Trainer:
         """Restore the best loss from the args.best_path if provided else
         from the model (`args.restore_path` or `args.continue_path`) used for resuming the training"""
         if self.restore_step != 0 or self.args.best_path:
-            print(f" > Restoring best loss from {os.path.basename(self.args.best_path)} ...")
+            restore_path = self.args.best_path if self.args.best_path else self.args.restore_path
+            print(f" > Restoring best loss from {os.path.basename(restore_path)} ...")
             ch = load_fsspec(self.args.restore_path, map_location="cpu")
             if "model_loss" in ch:
                 self.best_loss = ch["model_loss"]
@@ -982,6 +1075,7 @@ class Trainer:
 
         self.total_steps_done = self.restore_step
 
+
         for epoch in range(0, self.config.epochs):
             if self.num_gpus > 1:
                 # let all processes sync up before starting with a new epoch of training
@@ -993,6 +1087,8 @@ class Trainer:
             self.c_logger.print_epoch_start(epoch, self.config.epochs, self.output_path)
             if not self.args.skip_train_epoch:
                 self.train_epoch()
+                if self.mask is not None:
+                    self.mask.at_end_of_epoch()
             if self.config.run_eval:
                 self.eval_epoch()
             if epoch >= self.config.test_delay_epochs and self.args.rank <= 0:
@@ -1010,7 +1106,7 @@ class Trainer:
             self._fit()
             if self.args.rank == 0:
                 self.dashboard_logger.finish()
-            save = False
+            save = self.args.save_on_finish
             exit_code = 0
         except KeyboardInterrupt:
             self.callbacks.on_keyboard_interrupt()
@@ -1032,10 +1128,13 @@ class Trainer:
             if save:
                 try:
                     target_avg_loss = self._pick_target_avg_loss(self.keep_avg_train)
+                    if self.snip:
+                        apply_masks(self.model, self.snip_masks)
                     save_checkpoint(
                         self.config,
                         self.model,
                         self.optimizer,
+                        self.scheduler,
                         self.scaler if self.use_amp_scaler else None,
                         self.total_steps_done,
                         self.epochs_done,
@@ -1044,10 +1143,11 @@ class Trainer:
                     )
                 except:
                     traceback.print_exc()
-            try:
-                sys.exit(exit_code)
-            except SystemExit:
-                os._exit(exit_code)  # pylint: disable=protected-access
+            if self.args.exit_on_finish:
+                try:
+                    sys.exit(exit_code)
+                except SystemExit:
+                    os._exit(exit_code)  # pylint: disable=protected-access
 
     def save_best_model(self) -> None:
         """Save the best model. It only saves if the current target loss is smaller then the previous."""
@@ -1055,6 +1155,8 @@ class Trainer:
         # set the target loss to choose the best model
         target_loss_dict = self._pick_target_avg_loss(self.keep_avg_eval if self.keep_avg_eval else self.keep_avg_train)
 
+        if self.snip:
+            apply_masks(self.model, self.snip_masks)
         # save the model and update the best_loss
         self.best_loss = save_best_model(
             target_loss_dict,
@@ -1062,6 +1164,7 @@ class Trainer:
             self.config,
             self.model,
             self.optimizer,
+            self.scheduler,
             self.scaler if self.use_amp_scaler else None,
             self.total_steps_done,
             self.epochs_done,
@@ -1146,23 +1249,21 @@ class Trainer:
         Returns:
             nn.Module: Criterion layer.
         """
-        criterion = None
         criterion = model.get_criterion()
         return criterion
 
     ####################
     # HELPER FUNCTIONS
     ####################
-
     @staticmethod
     def _detach_loss_dict(loss_dict: Dict) -> Dict:
-        """Detach loss values from autograp.
+        """Detach loss values from autograd.
 
         Args:
             loss_dict (Dict): losses.
 
         Returns:
-            Dict: losses detached from autograph.
+            Dict: losses detached from autograd.
         """
         loss_dict_detached = {}
         for key, value in loss_dict.items():
@@ -1219,3 +1320,43 @@ class Trainer:
     def _is_apex_available() -> bool:
         """Check if Nvidia's APEX is available."""
         return importlib.util.find_spec("apex") is not None
+
+    @staticmethod
+    def add_scheduler_to_checkpoint(restore_path, model, config, output_path):
+
+        def _restore_list_objs(states, obj):
+            if isinstance(obj, list):
+                for idx, state in enumerate(states):
+                    obj[idx].load_state_dict(state)
+            else:
+                obj.load_state_dict(states)
+            return obj
+
+        print(" > Restoring from %s ..." % os.path.basename(restore_path))
+        checkpoint = load_fsspec(restore_path, map_location="cpu")
+        current_step = checkpoint["step"]
+
+        print(" > Restoring Model...")
+        model.load_state_dict(checkpoint["model"])
+        checkpoint["model"] = model
+
+
+        print(" > Restoring Optimizer...")
+        optimizer = Trainer.get_optimizer(model, config)
+        _restore_list_objs(checkpoint["optimizer"], optimizer)
+        checkpoint["optimizer"] = optimizer
+
+        print(" > Creating Scheduler...")
+        scheduler = Trainer.get_scheduler(model, config, optimizer)
+        if isinstance(scheduler, list):
+            for sched in scheduler:
+                sched.last_epoch = current_step
+        else:
+            scheduler.last_epoch = current_step
+        checkpoint["scheduler"] = scheduler
+
+        checkpoint["current_step"] = current_step
+
+        save_model(output_path=output_path, **checkpoint)
+        print(f" > Model with scheduler saved to {output_path}...")
+

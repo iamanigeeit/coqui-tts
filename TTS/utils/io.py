@@ -99,7 +99,7 @@ def save_fsspec(state: Any, path: str, **kwargs):
         torch.save(state, f, **kwargs)
 
 
-def save_model(config, model, optimizer, scaler, current_step, epoch, output_path, **kwargs):
+def save_model(config, model, optimizer, scheduler, scaler, current_step, epoch, output_path, **kwargs):
     if hasattr(model, "module"):
         model_state = model.module.state_dict()
     else:
@@ -108,6 +108,10 @@ def save_model(config, model, optimizer, scaler, current_step, epoch, output_pat
         optimizer_state = [optim.state_dict() for optim in optimizer]
     else:
         optimizer_state = optimizer.state_dict() if optimizer is not None else None
+    if isinstance(scheduler, list):
+        scheduler_state = [sched.state_dict() for sched in scheduler]
+    else:
+        scheduler_state = scheduler.state_dict() if scheduler is not None else None
 
     if isinstance(scaler, list):
         scaler_state = [s.state_dict() for s in scaler]
@@ -121,6 +125,7 @@ def save_model(config, model, optimizer, scaler, current_step, epoch, output_pat
         "config": config,
         "model": model_state,
         "optimizer": optimizer_state,
+        "scheduler": scheduler_state,
         "scaler": scaler_state,
         "step": current_step,
         "epoch": epoch,
@@ -134,6 +139,7 @@ def save_checkpoint(
     config,
     model,
     optimizer,
+    scheduler,
     scaler,
     current_step,
     epoch,
@@ -147,6 +153,7 @@ def save_checkpoint(
         config,
         model,
         optimizer,
+        scheduler,
         scaler,
         current_step,
         epoch,
@@ -161,6 +168,7 @@ def save_best_model(
     config,
     model,
     optimizer,
+    scheduler,
     scaler,
     current_step,
     epoch,
@@ -177,6 +185,7 @@ def save_best_model(
             config,
             model,
             optimizer,
+            scheduler,
             scaler,
             current_step,
             epoch,

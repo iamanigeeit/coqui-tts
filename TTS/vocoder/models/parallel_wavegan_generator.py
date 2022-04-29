@@ -121,6 +121,7 @@ class ParallelWaveganGenerator(torch.nn.Module):
     def inference(self, c):
         c = c.to(self.first_conv.weight.device)
         c = torch.nn.functional.pad(c, (self.inference_padding, self.inference_padding), "replicate")
+
         return self.forward(c)
 
     def remove_weight_norm(self):

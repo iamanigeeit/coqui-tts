@@ -47,7 +47,7 @@ def split_dataset(items, split_ratios):
     train_ratio, val_ratio, test_ratio = split_ratios
     assert train_ratio + val_ratio + test_ratio == 1, ' [!] Sum of train/val/test ratios should be 1'
 
-    items_df = pd.DataFrame(items, columns=('input_seq_path', 'ground_truth_path', 'speaker_name'))
+    items_df = pd.DataFrame(items, columns=('raw_text', 'ground_truth_path', 'speaker_name'))
     assert train_ratio * len(items_df) > 100, " [!] You do not have enough samples to train. You need at least 100 samples."
 
     def get_split_sizes(items):
